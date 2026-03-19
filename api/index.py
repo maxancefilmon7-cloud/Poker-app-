@@ -830,28 +830,35 @@ def export_excel():
     username = session['username']
     tournament = request.args.get('tournament', '')
 
-    try:
-        with get_db() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                if tournament:
-                    cur.execute("""
-                        SELECT id, tournament, heure, position, my_cards,
-                               winner, winner_cards, profit, new_stack, created_at
-                        FROM hands
-                        WHERE username=%s AND tournament=%s
-                        ORDER BY created_at ASC
-                    """, (username, tournament))
-                else:
-                    cur.execute("""
-                        SELECT id, tournament, heure, position, my_cards,
-                               winner, winner_cards, profit, new_stack, created_at
-                        FROM hands
-                        WHERE username=%s
-                        ORDER BY created_at ASC
-                    """, (username,))
-                rows = [dict(r) for r in cur.fetchall()]
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    rows = []
+    if DB_AVAILABLE:
+        try:
+            with get_db() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    if tournament:
+                        cur.execute("""
+                            SELECT id, tournament, heure, position, my_cards,
+                                   winner, winner_cards, profit, new_stack, created_at
+                            FROM hands
+                            WHERE username=%s AND tournament=%s
+                            ORDER BY created_at ASC
+                        """, (username, tournament))
+                    else:
+                        cur.execute("""
+                            SELECT id, tournament, heure, position, my_cards,
+                                   winner, winner_cards, profit, new_stack, created_at
+                            FROM hands
+                            WHERE username=%s
+                            ORDER BY created_at ASC
+                        """, (username,))
+                    rows = [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    # fallback mémoire
+    if not rows:
+        rows = [h for h in _mem_hands if h.get('username') == username]
+        if tournament:
+            rows = [h for h in rows if h.get('tournament') == tournament]
 
     df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
         'id', 'tournament', 'heure', 'position', 'my_cards',
