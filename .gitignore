@@ -1,0 +1,17 @@
+# Données utilisateurs (ne pas versionner)
+*.csv
+*.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+
+# VS Code
+.vscode/
+
+# Streamlit
+.streamlit/secrets.toml
