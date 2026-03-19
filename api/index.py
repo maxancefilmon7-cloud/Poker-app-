@@ -1032,7 +1032,5 @@ def save_villain_note():
 
 init_db()
 
-handler = app
-
 if __name__ == '__main__':
     app.run(debug=True)
