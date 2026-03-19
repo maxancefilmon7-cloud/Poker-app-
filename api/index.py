@@ -15,21 +15,21 @@ from flask import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-me')
-DATABASE_URL = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
-
 # ---------------------------------------------------------------------------
 # DB helpers — Postgres obligatoire (pas de fallback mémoire)
 # ---------------------------------------------------------------------------
 
 def get_db():
-    if not DATABASE_URL:
-        raise RuntimeError('Base de données non configurée. Ajoute POSTGRES_URL dans les variables Vercel.')
-    return psycopg2.connect(DATABASE_URL)
+    db_url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
+    if not db_url:
+        raise RuntimeError('Base de données non configurée. Ajoute DATABASE_URL dans les variables Railway.')
+    return psycopg2.connect(db_url)
 
 
 def init_db():
-    if not DATABASE_URL:
-        print('⚠️  POSTGRES_URL absent — base de données requise pour fonctionner.')
+    db_url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
+    if not db_url:
+        print('⚠️  DATABASE_URL absent — base de données requise pour fonctionner.')
         return
     try:
         with get_db() as conn:
