@@ -25,13 +25,22 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #1f2937; }
     ::-webkit-scrollbar-thumb { background: #374151; border-radius:3px; }
-    @media (min-width: 768px) {
-      .main-content { margin-left: 16rem; }
-    }
+    @media (min-width: 768px) { .main-content { margin-left: 16rem; } }
     @media (max-width: 767px) {
       .sidebar { transform: translateX(-100%); }
       .sidebar.open { transform: translateX(0); }
     }
+    /* Mode clair */
+    body.light { background-color:#f1f5f9; color:#0f172a; }
+    body.light .bg-gray-800 { background-color:#ffffff !important; }
+    body.light .bg-gray-700 { background-color:#f1f5f9 !important; }
+    body.light .bg-gray-900 { background-color:#e2e8f0 !important; }
+    body.light aside { background-color:#1e293b !important; }
+    body.light .border-gray-700 { border-color:#cbd5e1 !important; }
+    body.light .text-gray-400 { color:#475569 !important; }
+    body.light .text-gray-300 { color:#334155 !important; }
+    body.light .text-white { color:#0f172a !important; }
+    body.light input, body.light select, body.light textarea { background-color:#f8fafc !important; color:#0f172a !important; border-color:#cbd5e1 !important; }
   </style>
 </head>
 <body class="min-h-screen">
@@ -111,9 +120,15 @@
     <div id="vn-list" class="flex flex-col gap-2 text-xs"></div>
   </div>
 
-  <!-- Logout -->
-  <div class="p-4 border-t border-gray-700">
-    <button onclick="doLogout()" class="w-full text-gray-400 hover:text-red-400 text-sm">
+  <!-- Paramètres + Mode + Logout -->
+  <div class="p-4 border-t border-gray-700 flex flex-col gap-2">
+    <button onclick="openSettings()" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      ⚙️ Paramètres
+    </button>
+    <button onclick="toggleTheme()" id="theme-btn" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      ☀️ Mode clair
+    </button>
+    <button onclick="doLogout()" class="w-full text-gray-400 hover:text-red-400 text-sm py-1">
       Déconnexion
     </button>
   </div>
@@ -379,6 +394,31 @@
   </div>
 </div>
 
+<!-- MODAL PARAMÈTRES -->
+<div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.75)" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl">
+    <div class="flex justify-between items-center px-5 py-4 border-b border-gray-700">
+      <h3 class="font-black text-lg text-yellow-400">⚙️ Paramètres</h3>
+      <button onclick="document.getElementById('settings-modal').classList.add('hidden')" class="text-gray-400 hover:text-white text-xl font-bold">✕</button>
+    </div>
+    <div class="p-5 flex flex-col gap-3">
+      <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Tournoi actuel</div>
+      <button onclick="settingsDeleteCurrent()" class="w-full bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg py-2 text-sm">
+        🗑 Supprimer le tournoi actuel
+      </button>
+      <div class="border-t border-gray-700 pt-3">
+        <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Danger zone</div>
+        <button onclick="settingsResetHand()" class="w-full bg-orange-700 hover:bg-orange-600 text-white font-bold rounded-lg py-2 text-sm mb-2">
+          ↺ Annuler la main en cours
+        </button>
+        <button onclick="settingsGoSetup()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-lg py-2 text-sm">
+          🏠 Retour à la gestion des tournois
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ---------------------------------------------------------------------------
 // Mobile sidebar
@@ -390,6 +430,79 @@ function toggleSidebar() {
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.add('hidden');
+}
+
+// ---------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------
+function toggleTheme() {
+  const light = document.body.classList.toggle('light');
+  localStorage.setItem('theme', light ? 'light' : 'dark');
+  document.getElementById('theme-btn').textContent = light ? '🌙 Mode sombre' : '☀️ Mode clair';
+}
+(function() {
+  if (localStorage.getItem('theme') === 'light') {
+    document.body.classList.add('light');
+    document.addEventListener('DOMContentLoaded', () => {
+      const btn = document.getElementById('theme-btn');
+      if (btn) btn.textContent = '🌙 Mode sombre';
+    });
+  }
+})();
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+function openSettings() {
+  closeSidebar();
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+async function settingsDeleteCurrent() {
+  const name = S.tournoi;
+  if (!name) return showToast('Aucun tournoi actif', 'warn');
+  if (!confirm(`Supprimer toutes les mains de "${name}" ?`)) return;
+  document.getElementById('settings-modal').classList.add('hidden');
+  try {
+    const data = await api('/api/tournament/delete', { name });
+    S = { ...S, ...(data.state || {}) };
+    S.username = S.username || '';
+    updateSidebar();
+    showToast('Tournoi supprimé');
+    showView('setup');
+  } catch (e) {}
+}
+function settingsResetHand() {
+  if (!confirm('Annuler la main en cours ?')) return;
+  document.getElementById('settings-modal').classList.add('hidden');
+  S.step = 'START_HAND';
+  S.hand_data = null;
+  cardSels = {};
+  renderGame();
+  showView('game');
+}
+function settingsGoSetup() {
+  document.getElementById('settings-modal').classList.add('hidden');
+  loadTournaments();
+  showView('setup');
+}
+
+// ---------------------------------------------------------------------------
+// Positions par taille de table
+// ---------------------------------------------------------------------------
+const POSITIONS_BY_SIZE = {
+  6:  ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  7:  ['UTG', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  8:  ['UTG', 'UTG+1', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  9:  ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  10: ['UTG', 'UTG+1', 'UTG+2', 'MP', 'MP+1', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+};
+function getTableSize() {
+  return parseInt(localStorage.getItem('table_size') || '9');
+}
+function setTableSize(n) {
+  localStorage.setItem('table_size', n);
+  S.my_pos = null;
+  renderGame();
 }
 
 // ---------------------------------------------------------------------------
@@ -730,16 +843,23 @@ function renderGame() {
 function renderStartHand() {
   initCardPicker('h1');
   initCardPicker('h2');
-  const POSITIONS = ['UTG','HJ','CO','BTN','SB','BB'];
+  const size = getTableSize();
+  const POSITIONS = POSITIONS_BY_SIZE[size] || POSITIONS_BY_SIZE[9];
+  if (S.my_pos && !POSITIONS.includes(S.my_pos)) S.my_pos = null;
   const posBtns = POSITIONS.map(p => {
     const active = S.my_pos === p ? 'pos-btn selected' : 'pos-btn';
     return `<button class="${active} px-3 py-2 rounded-lg bg-gray-700 border border-gray-600 text-sm hover:bg-gray-600 font-semibold" onclick="selectPos('${p}')">${p}</button>`;
   }).join('');
+  const sizeBtns = [6,7,8,9,10].map(n =>
+    `<button onclick="setTableSize(${n})" class="px-3 py-1 rounded-lg text-xs font-bold ${n===size ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">${n} joueurs</button>`
+  ).join('');
 
   return `
     <div class="max-w-xl mx-auto">
       <h2 class="text-xl font-black text-yellow-400 mb-5">🃏 Nouvelle Main</h2>
       <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-4">
+        <div class="text-sm text-gray-400 mb-2 font-semibold">Taille de la table</div>
+        <div class="flex flex-wrap gap-2 mb-4">${sizeBtns}</div>
         <div class="text-sm text-gray-400 mb-3 font-semibold">Votre position</div>
         <div class="flex flex-wrap gap-2">${posBtns}</div>
       </div>
@@ -971,8 +1091,11 @@ function renderSetCards(label, count, keys, nextStep) {
   keys.forEach((k, i) => { html += renderCardPicker(k, `Carte ${i + 1}`); });
   html += `</div>`;
   html += `<button onclick="submitCards([${keys.map(k => `'${k}'`).join(',')}], '${nextStep}')"
-    class="w-full bg-blue-500 text-white font-black rounded-xl py-3 text-lg hover:bg-blue-400">
+    class="w-full bg-blue-500 text-white font-black rounded-xl py-3 text-lg hover:bg-blue-400 mb-3">
     Confirmer le ${label} →
+  </button>`;
+  html += `<button onclick="doUndo()" class="w-full text-gray-400 hover:text-yellow-400 text-sm py-2 border border-gray-700 rounded-xl hover:border-yellow-400 transition">
+    ↩ Revenir en arrière
   </button>`;
 
   return `<div class="max-w-xl mx-auto">
