@@ -880,8 +880,9 @@ async function startHand() {
   if (!pos) return showToast('Sélectionnez une position', 'warn');
   const c1 = getCard('h1') || '';
   const c2 = getCard('h2') || '';
+  const players = POSITIONS_BY_SIZE[getTableSize()] || POSITIONS_BY_SIZE[9];
   try {
-    const state = await api('/api/hand/start', { my_pos: pos, c1, c2 });
+    const state = await api('/api/hand/start', { my_pos: pos, c1, c2, players });
     state.username = S.username;
     S = state;
     cardSels = {};

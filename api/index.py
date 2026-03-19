@@ -141,13 +141,16 @@ def default_state():
 # Constants & helpers
 # ---------------------------------------------------------------------------
 
-POSITIONS = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB']
+# Ordre complet des sièges (toutes tailles de table)
+PREFLOP_SEAT_ORDER  = ['UTG', 'UTG+1', 'UTG+2', 'UTG+3', 'MP', 'MP+1', 'HJ', 'CO', 'BTN', 'SB', 'BB']
+POSTFLOP_SEAT_ORDER = ['SB', 'BB', 'UTG', 'UTG+1', 'UTG+2', 'UTG+3', 'MP', 'MP+1', 'HJ', 'CO', 'BTN']
 
 
-def get_action_order(street):
-    if street == 'Préflop':
-        return ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB']
-    return ['SB', 'BB', 'UTG', 'HJ', 'CO', 'BTN']
+def get_action_order(street, active_players=None):
+    order = PREFLOP_SEAT_ORDER if street == 'Préflop' else POSTFLOP_SEAT_ORDER
+    if active_players:
+        return [p for p in order if p in active_players]
+    return order
 
 
 def _snapshot(state):
@@ -447,14 +450,34 @@ def hand_start():
     c1 = data.get('c1', '')
     c2 = data.get('c2', '')
 
-    if not my_pos or my_pos not in POSITIONS:
+    if not my_pos:
         return jsonify({'error': 'Position invalide'}), 400
 
+    # Le frontend peut envoyer la liste complète des joueurs selon la taille de table
+    players = data.get('players')
+
     state = load_state(username)
+
+    # Mettre à jour initial_players si le frontend envoie la liste
+    if players and isinstance(players, list) and len(players) >= 2:
+        state['initial_players'] = players
 
     # Deduct ante from stack if applicable
     ante = state.get('ante', 0.0)
     bb_val = state.get('bb_val', 1000.0)
+
+    # Snapshot AVANT de modifier l'état → undo revient à START_HAND
+    pre_hand_snap = {
+        'step': 'START_HAND',
+        'active_players': copy.deepcopy(state.get('initial_players', [])),
+        'to_act_list': [],
+        'hand_data': {'pot_total': 0.0, 'actions': [], 'board': '', 'my_cards': ''},
+        'current_bet': 0.0,
+        'player_invested_street': {},
+        'hero_invested': 0.0,
+        'stack_actuel': state['stack_actuel'],
+        'is_raising': False,
+    }
 
     # Reset hand
     state['my_pos'] = my_pos
@@ -498,15 +521,14 @@ def hand_start():
         'my_cards': my_cards,
     }
 
-    # Build preflop to-act list (active players in order, skip SB/BB who already posted, start from UTG)
-    order = get_action_order('Préflop')
+    # Build preflop to-act list
     active = state['active_players']
-    to_act = [p for p in order if p in active]
-    state['to_act_list'] = to_act
+    order = get_action_order('Préflop', active)
+    state['to_act_list'] = order
     state['step'] = 'PREFLOP'
 
-    # Save snapshot
-    state['history'] = [_snapshot(state)]
+    # History: snapshot PRÉ-main en premier pour pouvoir revenir à START_HAND
+    state['history'] = [pre_hand_snap]
 
     persist_state(username, state)
     return jsonify(state)
@@ -624,8 +646,8 @@ def action_raise():
     state['is_raising'] = False
 
     # Rebuild to_act_list: everyone except raiser who is still active
-    order = get_action_order(street)
     active = state['active_players']
+    order = get_action_order(street, active)
     raiser_idx = order.index(current_actor) if current_actor in order else -1
     # Players after raiser in order + players before raiser who haven't folded, excluding raiser
     if raiser_idx >= 0:
@@ -663,11 +685,8 @@ def action_next_street():
     state['step'] = next_step
 
     if next_step in action_steps:
-        order = get_action_order(next_step.capitalize() if next_step != 'FLOP' else 'Flop')
-        # Use post-flop order
-        order = get_action_order('Flop')
         active = state['active_players']
-        state['to_act_list'] = [p for p in order if p in active]
+        state['to_act_list'] = get_action_order('Flop', active)
 
     persist_state(username, state)
     return jsonify(state)
@@ -699,9 +718,8 @@ def action_set_cards():
     state['step'] = next_step
 
     if next_step in ('FLOP', 'TURN', 'RIVER'):
-        order = get_action_order('Flop')
         active = state['active_players']
-        state['to_act_list'] = [p for p in order if p in active]
+        state['to_act_list'] = get_action_order('Flop', active)
 
     persist_state(username, state)
     return jsonify(state)
