@@ -1030,6 +1030,8 @@ def save_villain_note():
     return jsonify({'ok': True})
 
 
+handler = app
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True)

@@ -1,6 +1,8 @@
 # Données utilisateurs (ne pas versionner)
 *.csv
 *.json
+!vercel.json
+!package.json
 
 # Python
 __pycache__/
