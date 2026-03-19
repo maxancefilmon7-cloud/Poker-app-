@@ -56,8 +56,10 @@ def init_db():
                         heure TEXT,
                         position TEXT,
                         my_cards TEXT,
+                        board TEXT,
                         winner TEXT,
                         winner_cards TEXT,
+                        actions JSONB DEFAULT '[]',
                         profit REAL,
                         new_stack REAL,
                         created_at TIMESTAMPTZ DEFAULT NOW()
@@ -70,6 +72,12 @@ def init_db():
                         created_at TIMESTAMPTZ DEFAULT NOW()
                     );
                 """)
+                # Migration : ajoute les colonnes si elles n'existent pas (tables existantes)
+                for col_sql in [
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS board TEXT DEFAULT ''",
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS actions JSONB DEFAULT '[]'",
+                ]:
+                    cur.execute(col_sql)
             conn.commit()
         DB_AVAILABLE = True
     except Exception as e:
@@ -182,8 +190,10 @@ def _save_hand_db(username, state, winner, winner_cards, profit):
         'heure': datetime.now().strftime('%H:%M'),
         'position': state['my_pos'],
         'my_cards': state['hand_data']['my_cards'],
+        'board': state['hand_data'].get('board', '').strip(),
         'winner': winner,
         'winner_cards': winner_cards,
+        'actions': state['hand_data'].get('actions', []),
         'profit': profit,
         'new_stack': state['stack_actuel'],
         'created_at': datetime.now().isoformat(),
@@ -196,12 +206,14 @@ def _save_hand_db(username, state, winner, winner_cards, profit):
                     cur.execute("""
                         INSERT INTO hands
                             (username, tournament, heure, position, my_cards,
-                             winner, winner_cards, profit, new_stack)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             board, winner, winner_cards, actions, profit, new_stack)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         hand['username'], hand['tournament'], hand['heure'],
-                        hand['position'], hand['my_cards'], hand['winner'],
-                        hand['winner_cards'], hand['profit'], hand['new_stack'],
+                        hand['position'], hand['my_cards'], hand['board'],
+                        hand['winner'], hand['winner_cards'],
+                        json.dumps(hand['actions']),
+                        hand['profit'], hand['new_stack'],
                     ))
                 conn.commit()
         except Exception as e:
@@ -807,13 +819,19 @@ def get_stats():
     # Get distinct tournaments
     tournaments_in_data = list({r['tournament'] for r in rows if r.get('tournament')})
 
-    # Last 10 hands (most recent first)
-    last_hands = list(reversed(rows[-10:]))
+    # 20 dernières mains (plus récentes en premier)
+    last_hands = list(reversed(rows[-20:]))
 
-    # Serialize datetime fields
+    # Serialize + normalise actions
     for r in last_hands:
         if hasattr(r.get('created_at'), 'isoformat'):
             r['created_at'] = r['created_at'].isoformat()
+        # actions peut être un str JSON (depuis Postgres) ou déjà une liste
+        if isinstance(r.get('actions'), str):
+            try: r['actions'] = json.loads(r['actions'])
+            except: r['actions'] = []
+        if r.get('actions') is None:
+            r['actions'] = []
 
     return jsonify({
         'hands': last_hands,
@@ -860,14 +878,36 @@ def export_excel():
         if tournament:
             rows = [h for h in rows if h.get('tournament') == tournament]
 
-    df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=[
-        'id', 'tournament', 'heure', 'position', 'my_cards',
-        'winner', 'winner_cards', 'profit', 'new_stack', 'created_at'
-    ])
+    # Construit un DataFrame lisible avec les actions explodées
+    export_rows = []
+    for r in rows:
+        actions = r.get('actions') or []
+        if isinstance(actions, str):
+            try: actions = json.loads(actions)
+            except: actions = []
+        export_rows.append({
+            'Heure':        r.get('heure', ''),
+            'Tournoi':      r.get('tournament', ''),
+            'Position':     r.get('position', ''),
+            'Mes cartes':   r.get('my_cards', ''),
+            'Board':        r.get('board', ''),
+            'Gagnant':      r.get('winner', ''),
+            'Cartes gagnant': r.get('winner_cards', ''),
+            'Profit (jetons)': r.get('profit', 0),
+            'Nouveau stack': r.get('new_stack', 0),
+            'Actions détaillées': ' | '.join(actions) if actions else '',
+        })
+
+    df = pd.DataFrame(export_rows) if export_rows else pd.DataFrame()
 
     buf = BytesIO()
     with pd.ExcelWriter(buf, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Mains')
+        # Ajuste la largeur des colonnes
+        ws = writer.sheets['Mains']
+        for col in ws.columns:
+            max_len = max((len(str(c.value)) for c in col if c.value), default=10)
+            ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 80)
 
     buf.seek(0)
     filename = f'poker_{username}_{tournament or "all"}.xlsx'
