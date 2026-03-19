@@ -25,6 +25,8 @@ def get_db():
               os.environ.get('DATABASE_PUBLIC_URL', ''))
     if not db_url:
         raise RuntimeError('Base de données non configurée. Ajoute DATABASE_URL dans les variables Railway.')
+    if 'sslmode' not in db_url:
+        db_url += ('&sslmode=require' if '?' in db_url else '?sslmode=require')
     return psycopg2.connect(db_url)
 
 
@@ -231,6 +233,15 @@ def require_auth(f):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+_db_ready = False
+
+@app.before_request
+def ensure_db():
+    global _db_ready
+    if not _db_ready:
+        init_db()
+        _db_ready = True
 
 @app.route('/')
 def index():
@@ -1033,8 +1044,6 @@ def save_villain_note():
 
     return jsonify({'ok': True})
 
-
-init_db()
 
 if __name__ == '__main__':
     app.run(debug=True)
