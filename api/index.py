@@ -793,45 +793,45 @@ def get_stats():
     try:
         with get_db() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    if tournament and fav_only:
-                        cur.execute("""
-                            SELECT id, username, tournament, heure, position, my_cards,
-                                   board, winner, winner_cards, actions, profit, new_stack,
-                                   created_at, is_favorite
-                            FROM hands
-                            WHERE username=%s AND tournament=%s AND is_favorite = TRUE
-                            ORDER BY created_at ASC
-                        """, (username, tournament))
-                    elif tournament:
-                        cur.execute("""
-                            SELECT id, username, tournament, heure, position, my_cards,
-                                   board, winner, winner_cards, actions, profit, new_stack,
-                                   created_at, is_favorite
-                            FROM hands
-                            WHERE username=%s AND tournament=%s
-                            ORDER BY created_at ASC
-                        """, (username, tournament))
-                    elif fav_only:
-                        cur.execute("""
-                            SELECT id, username, tournament, heure, position, my_cards,
-                                   board, winner, winner_cards, actions, profit, new_stack,
-                                   created_at, is_favorite
-                            FROM hands
-                            WHERE username=%s AND is_favorite = TRUE
-                            ORDER BY created_at ASC
-                        """, (username,))
-                    else:
-                        cur.execute("""
-                            SELECT id, username, tournament, heure, position, my_cards,
-                                   board, winner, winner_cards, actions, profit, new_stack,
-                                   created_at, is_favorite
-                            FROM hands
-                            WHERE username=%s
-                            ORDER BY created_at ASC
-                        """, (username,))
-                    rows = [dict(r) for r in cur.fetchall()]
-        except Exception as e:
-            print(f'get_stats DB error: {e}')
+                if tournament and fav_only:
+                    cur.execute("""
+                        SELECT id, username, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack,
+                               created_at, is_favorite
+                        FROM hands
+                        WHERE username=%s AND tournament=%s AND is_favorite = TRUE
+                        ORDER BY created_at ASC
+                    """, (username, tournament))
+                elif tournament:
+                    cur.execute("""
+                        SELECT id, username, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack,
+                               created_at, is_favorite
+                        FROM hands
+                        WHERE username=%s AND tournament=%s
+                        ORDER BY created_at ASC
+                    """, (username, tournament))
+                elif fav_only:
+                    cur.execute("""
+                        SELECT id, username, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack,
+                               created_at, is_favorite
+                        FROM hands
+                        WHERE username=%s AND is_favorite = TRUE
+                        ORDER BY created_at ASC
+                    """, (username,))
+                else:
+                    cur.execute("""
+                        SELECT id, username, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack,
+                               created_at, is_favorite
+                        FROM hands
+                        WHERE username=%s
+                        ORDER BY created_at ASC
+                    """, (username,))
+                rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f'get_stats DB error: {e}')
 
     total_profit = sum(r.get('profit') or 0 for r in rows)
     total_hands = len(rows)
