@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Pro Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    body { background-color: #111827; color: #f9fafb; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .sidebar { transition: transform 0.3s ease; }
+    .main-content { transition: margin-left 0.3s ease; }
+    .card-btn { transition: all 0.15s; }
+    .card-btn.selected-v { background: #facc15; color: #111; font-weight: 800; }
+    .card-btn.selected-s { background: #facc15; color: #111; font-weight: 800; }
+    .toast { animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s forwards; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+    @keyframes fadeOut { from { opacity:1; } to { opacity:0; pointer-events:none; } }
+    .tab-btn.active { background:#facc15; color:#111; font-weight:700; }
+    .pos-btn.selected { background:#facc15; color:#111; font-weight:800; border-color:#facc15; }
+    input[type=number]::-webkit-inner-spin-button { opacity:1; }
+    .suit-red { color: #ef4444; }
+    .suit-black { color: #f9fafb; }
+    .street-badge { letter-spacing: 0.25em; font-size: 1.1rem; font-weight:700; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1f2937; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius:3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-40 flex flex-col overflow-y-auto">
+  <div class="p-4 border-b border-gray-700">
+    <div class="text-yellow-400 font-black text-lg">♠ Poker Pro Tracker</div>
+    <div id="sb-username" class="text-gray-400 text-sm mt-1"></div>
+  </div>
+
+  <!-- Stack & tournoi -->
+  <div class="p-4 border-b border-gray-700">
+    <div class="text-xs text-gray-500 uppercase tracking-wide">Tournoi</div>
+    <div id="sb-tournoi" class="text-white font-semibold truncate">—</div>
+    <div class="text-xs text-gray-500 uppercase tracking-wide mt-2">Stack</div>
+    <div id="sb-stack" class="text-yellow-400 font-black text-xl">—</div>
+    <div id="sb-bb-info" class="text-gray-400 text-xs mt-1"></div>
+  </div>
+
+  <!-- Navigation -->
+  <div class="p-4 border-b border-gray-700 flex flex-col gap-2">
+    <button onclick="showView('game')" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      🃏 Jouer
+    </button>
+    <button onclick="switchToStats()" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      📊 Statistiques
+    </button>
+  </div>
+
+  <!-- Update Blinds -->
+  <div class="p-4 border-b border-gray-700">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Changer Blinds</div>
+    <input id="sb-level" type="text" placeholder="500/1000" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mb-2" />
+    <div class="text-xs text-gray-400 mb-1">Ante :</div>
+    <div class="flex gap-2 mb-2" id="sb-ante-group">
+      <label class="flex items-center gap-1 text-xs cursor-pointer">
+        <input type="radio" name="sb-ante" value="0" checked class="accent-yellow-400" /> Aucun
+      </label>
+      <label class="flex items-center gap-1 text-xs cursor-pointer">
+        <input type="radio" name="sb-ante" value="12.5" class="accent-yellow-400" /> 12.5%
+      </label>
+      <label class="flex items-center gap-1 text-xs cursor-pointer">
+        <input type="radio" name="sb-ante" value="25" class="accent-yellow-400" /> 25%
+      </label>
+    </div>
+    <button onclick="updateBlinds()" class="w-full bg-yellow-400 text-black rounded px-2 py-1 text-sm font-bold hover:bg-yellow-300">
+      Mettre à jour
+    </button>
+  </div>
+
+  <!-- Villain Notes -->
+  <div class="p-4 flex-1">
+    <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Villain Notes</div>
+    <input id="vn-name" type="text" placeholder="Nom joueur" class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mb-2" />
+    <textarea id="vn-note" rows="2" placeholder="Note..." class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm mb-2 resize-none"></textarea>
+    <button onclick="saveVillainNote()" class="w-full bg-blue-600 text-white rounded px-2 py-1 text-sm font-semibold hover:bg-blue-500 mb-3">
+      Sauvegarder note
+    </button>
+    <div id="vn-list" class="flex flex-col gap-2 text-xs"></div>
+  </div>
+
+  <!-- Logout -->
+  <div class="p-4 border-t border-gray-700">
+    <button onclick="doLogout()" class="w-full text-gray-400 hover:text-red-400 text-sm">
+      Déconnexion
+    </button>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main id="main-content" class="main-content min-h-screen">
+
+  <!-- LOGIN VIEW -->
+  <div id="view-login" class="hidden">
+    <div class="min-h-screen flex items-center justify-center">
+      <div class="bg-gray-800 rounded-2xl p-10 w-full max-w-sm shadow-2xl border border-gray-700">
+        <div class="text-center mb-8">
+          <div class="text-6xl mb-3">♠</div>
+          <h1 class="text-3xl font-black text-yellow-400">Poker Pro Tracker</h1>
+          <p class="text-gray-400 text-sm mt-2">Votre assistant de tournoi</p>
+        </div>
+        <div class="flex flex-col gap-4">
+          <input id="login-username" type="text" placeholder="Votre pseudo"
+            class="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-yellow-400"
+            onkeydown="if(event.key==='Enter') doLogin()" />
+          <button onclick="doLogin()" class="w-full bg-yellow-400 text-black font-black rounded-xl py-3 text-lg hover:bg-yellow-300 transition">
+            Connexion →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETUP VIEW -->
+  <div id="view-setup" class="hidden p-6">
+    <h2 class="text-2xl font-black text-yellow-400 mb-6">🏆 Gestion des Tournois</h2>
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-6">
+      <button class="tab-btn active px-4 py-2 rounded-lg bg-gray-700 text-sm" onclick="switchTab('create')">Créer</button>
+      <button class="tab-btn px-4 py-2 rounded-lg bg-gray-700 text-sm" onclick="switchTab('resume')">Reprendre</button>
+      <button class="tab-btn px-4 py-2 rounded-lg bg-gray-700 text-sm" onclick="switchTab('delete')">Supprimer</button>
+    </div>
+
+    <!-- Create -->
+    <div id="tab-create" class="bg-gray-800 rounded-xl p-6 border border-gray-700 max-w-lg">
+      <h3 class="font-bold text-white mb-4">Nouveau tournoi</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">Nom du tournoi</label>
+          <input id="c-name" type="text" placeholder="Ex: PKO Main Event" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">Stack de départ (jetons)</label>
+          <input id="c-stack" type="number" value="10000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">Niveau blindes (SB/BB)</label>
+          <input id="c-level" type="text" placeholder="500/1000" value="500/1000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 mb-2 block">Ante</label>
+          <div class="flex gap-3 flex-wrap" id="c-ante-group">
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="c-ante" value="0" checked class="accent-yellow-400" /> Aucun
+            </label>
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="c-ante" value="12.5" class="accent-yellow-400" /> 12.5% BB
+            </label>
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="c-ante" value="25" class="accent-yellow-400" /> 25% BB
+            </label>
+          </div>
+        </div>
+        <button onclick="createTournament()" class="mt-2 bg-yellow-400 text-black font-bold rounded-lg px-4 py-2 hover:bg-yellow-300">
+          Créer et commencer
+        </button>
+      </div>
+    </div>
+
+    <!-- Resume -->
+    <div id="tab-resume" class="hidden bg-gray-800 rounded-xl p-6 border border-gray-700 max-w-lg">
+      <h3 class="font-bold text-white mb-4">Reprendre un tournoi</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">Tournoi</label>
+          <select id="r-name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadResumeInfo()">
+            <option value="">-- Sélectionner --</option>
+          </select>
+        </div>
+        <div id="r-last-stack-info" class="text-sm text-green-400"></div>
+        <div>
+          <label class="text-xs text-gray-400 mb-2 block">Ante actuel</label>
+          <div class="flex gap-3 flex-wrap" id="r-ante-group">
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="r-ante" value="0" checked class="accent-yellow-400" /> Aucun
+            </label>
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="r-ante" value="12.5" class="accent-yellow-400" /> 12.5% BB
+            </label>
+            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+              <input type="radio" name="r-ante" value="25" class="accent-yellow-400" /> 25% BB
+            </label>
+          </div>
+        </div>
+        <button onclick="resumeTournament()" class="mt-2 bg-green-500 text-black font-bold rounded-lg px-4 py-2 hover:bg-green-400">
+          Reprendre
+        </button>
+      </div>
+    </div>
+
+    <!-- Delete -->
+    <div id="tab-delete" class="hidden bg-gray-800 rounded-xl p-6 border border-gray-700 max-w-lg">
+      <h3 class="font-bold text-white mb-4">Supprimer un tournoi</h3>
+      <div class="flex flex-col gap-3">
+        <div>
+          <label class="text-xs text-gray-400 mb-1 block">Tournoi</label>
+          <select id="d-name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm">
+            <option value="">-- Sélectionner --</option>
+          </select>
+        </div>
+        <button onclick="deleteTournament()" class="mt-2 bg-red-600 text-white font-bold rounded-lg px-4 py-2 hover:bg-red-500">
+          Supprimer toutes les mains
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME VIEW -->
+  <div id="view-game" class="hidden p-4 md:p-6">
+    <div id="game-content"></div>
+  </div>
+
+  <!-- STATS VIEW -->
+  <div id="view-stats" class="hidden p-4 md:p-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <h2 class="text-2xl font-black text-yellow-400">📊 Statistiques</h2>
+      <div class="flex gap-2 items-center flex-wrap">
+        <select id="stats-tourney" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadStats()">
+          <option value="">Tous les tournois</option>
+        </select>
+        <button onclick="exportExcel()" class="bg-green-600 text-white font-bold rounded-lg px-4 py-2 text-sm hover:bg-green-500">
+          Export Excel
+        </button>
+        <button onclick="showView('game')" class="bg-gray-700 text-white rounded-lg px-4 py-2 text-sm hover:bg-gray-600">
+          ← Retour
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div class="text-xs text-gray-400 mb-1">Mains jouées</div>
+        <div id="stat-hands" class="text-2xl font-black text-white">—</div>
+      </div>
+      <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div class="text-xs text-gray-400 mb-1">Profit total</div>
+        <div id="stat-profit" class="text-2xl font-black">—</div>
+      </div>
+      <div class="bg-gray-800 rounded-xl p-4 border border-gray-700">
+        <div class="text-xs text-gray-400 mb-1">Tournois</div>
+        <div id="stat-tourneys" class="text-2xl font-black text-white">—</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 mb-6">
+      <div class="text-sm text-gray-400 mb-3 font-semibold">Évolution du stack</div>
+      <canvas id="stack-chart" height="120"></canvas>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-700 text-gray-400 text-xs uppercase">
+            <th class="px-4 py-3 text-left">Heure</th>
+            <th class="px-4 py-3 text-left">Tournoi</th>
+            <th class="px-4 py-3 text-left">Position</th>
+            <th class="px-4 py-3 text-left">Cartes</th>
+            <th class="px-4 py-3 text-left">Gagnant</th>
+            <th class="px-4 py-3 text-right">Profit</th>
+            <th class="px-4 py-3 text-right">Stack</th>
+          </tr>
+        </thead>
+        <tbody id="stats-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ---------------------------------------------------------------------------
+// Global state
+// ---------------------------------------------------------------------------
+let S = {};
+let chartInstance = null;
+let cardSels = {}; // {key: {v: null, s: null}}
+const SUITS = ['♠', '♥', '♦', '♣'];
+const SUIT_NAMES = { '♠': 's', '♥': 'h', '♦': 'd', '♣': 'c' };
+const SUIT_COLORS = { '♠': 'text-gray-200', '♥': 'text-red-400', '♦': 'text-red-400', '♣': 'text-gray-200' };
+const VALUES = ['2','3','4','5','6','7','8','9','T','J','Q','K','A'];
+
+// ---------------------------------------------------------------------------
+// API helper
+// ---------------------------------------------------------------------------
+async function api(path, body) {
+  const opts = {
+    method: body !== undefined ? 'POST' : 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  const d = await r.json();
+  if (!r.ok) {
+    showToast(d.error || 'Erreur serveur', 'error');
+    throw new Error(d.error || 'API error');
+  }
+  return d;
+}
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+function showToast(msg, type = 'success') {
+  const tc = document.getElementById('toast-container');
+  const div = document.createElement('div');
+  const bg = type === 'error' ? 'bg-red-600' : type === 'warn' ? 'bg-yellow-500 text-black' : 'bg-green-600';
+  div.className = `toast ${bg} text-white px-4 py-3 rounded-xl shadow-xl text-sm max-w-xs pointer-events-auto`;
+  div.textContent = msg;
+  tc.appendChild(div);
+  setTimeout(() => div.remove(), 3100);
+}
+
+// ---------------------------------------------------------------------------
+// Card Picker
+// ---------------------------------------------------------------------------
+function initCardPicker(key) {
+  cardSels[key] = { v: null, s: null };
+}
+
+function getCard(key) {
+  const sel = cardSels[key];
+  if (!sel || !sel.v || !sel.s) return null;
+  const suitMap = { '♠': 's', '♥': 'h', '♦': 'd', '♣': 'c' };
+  return sel.v + suitMap[sel.s];
+}
+
+function renderCardPickerInner(key) {
+  const sel = cardSels[key] || { v: null, s: null };
+  const card = getCard(key);
+  const displayCard = card ? formatCard(card) : '<span class="text-gray-600">??</span>';
+
+  const valBtns = VALUES.map(v => {
+    const active = sel.v === v ? 'bg-yellow-400 text-black font-black' : 'bg-gray-700 hover:bg-gray-600 text-white';
+    return `<button class="card-btn ${active} rounded px-1.5 py-1 text-xs font-mono" onclick="selectCard('${key}','v','${v}')">${v}</button>`;
+  }).join('');
+
+  const suitBtns = SUITS.map(s => {
+    const color = (s === '♥' || s === '♦') ? 'text-red-400' : 'text-gray-100';
+    const active = sel.s === s ? 'bg-yellow-400 !text-black font-black' : 'bg-gray-700 hover:bg-gray-600';
+    return `<button class="card-btn ${active} ${color} rounded px-2 py-1 text-base" onclick="selectCard('${key}','s','${encodeURIComponent(s)}')">${s}</button>`;
+  }).join('');
+
+  return `
+    <div class="text-center text-2xl mb-2">${displayCard}</div>
+    <div class="flex flex-wrap gap-1 justify-center mb-2">${valBtns}</div>
+    <div class="flex gap-1 justify-center">${suitBtns}</div>
+  `;
+}
+
+// Workaround: suits passed via encodeURIComponent in onclick, decode back
+function selectCard(key, type, val) {
+  val = decodeURIComponent(val);
+  if (!cardSels[key]) cardSels[key] = { v: null, s: null };
+  if (cardSels[key][type] === val) {
+    cardSels[key][type] = null;
+  } else {
+    cardSels[key][type] = val;
+  }
+  const container = document.getElementById(`cp-${key}`);
+  if (container) container.innerHTML = renderCardPickerInner(key);
+}
+
+function renderCardPicker(key, label) {
+  if (!cardSels[key]) cardSels[key] = { v: null, s: null };
+  return `
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-3">
+      <div class="text-xs text-gray-400 mb-2 font-semibold">${label}</div>
+      <div id="cp-${key}">${renderCardPickerInner(key)}</div>
+    </div>
+  `;
+}
+
+function formatCard(c) {
+  if (!c || c.length < 2) return c || '';
+  const val = c.slice(0, -1);
+  const s = c.slice(-1);
+  const suitMap = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  const suit = suitMap[s] || s;
+  const red = (s === 'h' || s === 'd');
+  return `<span class="font-black">${val}</span><span class="${red ? 'text-red-400' : ''}">${suit}</span>`;
+}
+
+function formatBoard(board) {
+  if (!board) return '';
+  return board.split(' ').map(c => `<span class="inline-block mx-1 text-xl">${formatCard(c)}</span>`).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Radar
+// ---------------------------------------------------------------------------
+function renderRadar(toActList) {
+  const currentToAct = toActList && toActList.length > 0 ? toActList[0] : null;
+  return (S.initial_players || []).map(p => {
+    const hero = p === S.my_pos ? ' (Toi)' : '';
+    const folded = !(S.active_players || []).includes(p);
+    const current = p === currentToAct;
+    let cls = folded
+      ? 'bg-gray-800 text-gray-500 line-through border-gray-700'
+      : current
+        ? 'bg-green-500 text-black font-black border-white shadow-green-400 shadow-lg border-2'
+        : 'bg-blue-900 text-blue-100 border-blue-500';
+    return `<div class="px-3 py-2 rounded-lg text-sm border ${cls}">${p}${hero}</div>`;
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Views
+// ---------------------------------------------------------------------------
+function showView(name) {
+  ['login', 'setup', 'game', 'stats'].forEach(v => {
+    document.getElementById(`view-${v}`).classList.add('hidden');
+  });
+  document.getElementById(`view-${name}`).classList.remove('hidden');
+
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main-content');
+  if (name === 'login' || name === 'setup') {
+    sidebar.style.transform = 'translateX(-100%)';
+    main.style.marginLeft = '0';
+  } else {
+    sidebar.style.transform = 'translateX(0)';
+    main.style.marginLeft = '16rem';
+  }
+
+  if (name === 'game') renderGame();
+  if (name === 'stats') loadStats();
+}
+
+// ---------------------------------------------------------------------------
+// Sidebar
+// ---------------------------------------------------------------------------
+function updateSidebar() {
+  document.getElementById('sb-username').textContent = S.username || '';
+  document.getElementById('sb-tournoi').textContent = S.tournoi || '—';
+  const stack = S.stack_actuel !== undefined ? Math.round(S.stack_actuel).toLocaleString('fr-FR') : '—';
+  document.getElementById('sb-stack').textContent = stack !== '—' ? stack + ' 🪙' : '—';
+  const bb = S.bb_val || 0;
+  if (bb > 0 && S.stack_actuel !== undefined) {
+    const bbs = (S.stack_actuel / bb).toFixed(1);
+    document.getElementById('sb-bb-info').textContent = `${bbs} BB | BB=${Math.round(bb).toLocaleString('fr-FR')}`;
+  } else {
+    document.getElementById('sb-bb-info').textContent = '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  if (!username) return showToast('Entrez votre pseudo', 'error');
+  try {
+    const state = await api('/api/login', { username });
+    state.username = username;
+    S = state;
+    if (S.step === 'SETUP' || !S.tournoi) {
+      await loadTournaments();
+      showView('setup');
+    } else {
+      showView('game');
+    }
+    updateSidebar();
+    loadVillainNotes();
+  } catch (e) {}
+}
+
+async function doLogout() {
+  try { await api('/api/logout', {}); } catch (e) {}
+  S = {};
+  cardSels = {};
+  showView('login');
+  document.getElementById('login-username').value = '';
+}
+
+// ---------------------------------------------------------------------------
+// Tournaments
+// ---------------------------------------------------------------------------
+async function loadTournaments() {
+  try {
+    const data = await api('/api/tournaments');
+    const tourneys = data.tournaments || [];
+    ['r-name', 'd-name', 'stats-tourney'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const defOpt = id === 'stats-tourney' ? '<option value="">Tous les tournois</option>' : '<option value="">-- Sélectionner --</option>';
+      sel.innerHTML = defOpt + tourneys.map(t => `<option value="${t}">${t}</option>`).join('');
+    });
+  } catch (e) {}
+}
+
+function switchTab(tab) {
+  ['create', 'resume', 'delete'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.add('hidden');
+    document.querySelectorAll('.tab-btn')[['create','resume','delete'].indexOf(t)].classList.remove('active');
+  });
+  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn')[['create','resume','delete'].indexOf(tab)].classList.add('active');
+  if (tab === 'resume' || tab === 'delete') loadTournaments();
+}
+
+async function createTournament() {
+  const name = document.getElementById('c-name').value.trim();
+  const stack = parseFloat(document.getElementById('c-stack').value) || 0;
+  const level = document.getElementById('c-level').value.trim() || '500/1000';
+  const ante = parseFloat(document.querySelector('input[name="c-ante"]:checked')?.value || '0');
+  if (!name) return showToast('Nom requis', 'error');
+  try {
+    const state = await api('/api/tournament/create', { name, stack, level, ante });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    showView('game');
+  } catch (e) {}
+}
+
+async function loadResumeInfo() {
+  const name = document.getElementById('r-name').value;
+  const infoEl = document.getElementById('r-last-stack-info');
+  if (!name) { infoEl.textContent = ''; return; }
+  try {
+    const data = await api('/api/stats?tournament=' + encodeURIComponent(name));
+    if (data.stack_history && data.stack_history.length > 0) {
+      const last = data.stack_history[data.stack_history.length - 1];
+      infoEl.textContent = `Dernier stack: ${Math.round(last.stack).toLocaleString('fr-FR')} jetons`;
+    } else {
+      infoEl.textContent = 'Aucune main enregistrée';
+    }
+  } catch (e) { infoEl.textContent = ''; }
+}
+
+async function resumeTournament() {
+  const name = document.getElementById('r-name').value;
+  if (!name) return showToast('Sélectionner un tournoi', 'error');
+  const ante = parseFloat(document.querySelector('input[name="r-ante"]:checked')?.value || '0');
+  try {
+    const state = await api('/api/tournament/resume', { name, ante });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    showView('game');
+  } catch (e) {}
+}
+
+async function deleteTournament() {
+  const name = document.getElementById('d-name').value;
+  if (!name) return showToast('Sélectionner un tournoi', 'error');
+  if (!confirm(`Supprimer toutes les mains de "${name}" ?`)) return;
+  try {
+    const data = await api('/api/tournament/delete', { name });
+    S = { ...S, ...(data.state || {}) };
+    S.username = S.username || '';
+    updateSidebar();
+    await loadTournaments();
+    showToast('Tournoi supprimé');
+  } catch (e) {}
+}
+
+async function switchToStats() {
+  await loadTournaments();
+  showView('stats');
+}
+
+async function updateBlinds() {
+  const level = document.getElementById('sb-level').value.trim();
+  if (!level) return showToast('Entrez un niveau', 'warn');
+  const ante = parseFloat(document.querySelector('input[name="sb-ante"]:checked')?.value || '0');
+  try {
+    const state = await api('/api/tournament/update-blinds', { level, ante });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    showToast('Blindes mises à jour');
+    renderGame();
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// Game rendering
+// ---------------------------------------------------------------------------
+function renderGame() {
+  const el = document.getElementById('game-content');
+  if (!S || !S.step) { el.innerHTML = ''; return; }
+
+  switch (S.step) {
+    case 'START_HAND': el.innerHTML = renderStartHand(); break;
+    case 'PREFLOP':    el.innerHTML = renderAction('Préflop', 'FLOP_CARDS'); break;
+    case 'FLOP_CARDS': el.innerHTML = renderSetCards('Flop', 3, ['fc1','fc2','fc3'], 'FLOP'); break;
+    case 'FLOP':       el.innerHTML = renderAction('Flop', 'TURN_CARD'); break;
+    case 'TURN_CARD':  el.innerHTML = renderSetCards('Turn', 1, ['tc1'], 'TURN'); break;
+    case 'TURN':       el.innerHTML = renderAction('Turn', 'RIVER_CARD'); break;
+    case 'RIVER_CARD': el.innerHTML = renderSetCards('River', 1, ['rc1'], 'RIVER'); break;
+    case 'RIVER':      el.innerHTML = renderAction('River', 'RESULTAT'); break;
+    case 'RESULTAT':   el.innerHTML = renderResult(); break;
+    default:           el.innerHTML = `<div class="text-gray-500">Étape: ${S.step}</div>`; break;
+  }
+}
+
+// --- START HAND ---
+function renderStartHand() {
+  initCardPicker('h1');
+  initCardPicker('h2');
+  const POSITIONS = ['UTG','HJ','CO','BTN','SB','BB'];
+  const posBtns = POSITIONS.map(p => {
+    const active = S.my_pos === p ? 'pos-btn selected' : 'pos-btn';
+    return `<button class="${active} px-3 py-2 rounded-lg bg-gray-700 border border-gray-600 text-sm hover:bg-gray-600 font-semibold" onclick="selectPos('${p}')">${p}</button>`;
+  }).join('');
+
+  return `
+    <div class="max-w-xl mx-auto">
+      <h2 class="text-xl font-black text-yellow-400 mb-5">🃏 Nouvelle Main</h2>
+      <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-4">
+        <div class="text-sm text-gray-400 mb-3 font-semibold">Votre position</div>
+        <div class="flex flex-wrap gap-2">${posBtns}</div>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        ${renderCardPicker('h1', 'Carte 1')}
+        ${renderCardPicker('h2', 'Carte 2')}
+      </div>
+      <button onclick="startHand()" class="w-full bg-yellow-400 text-black font-black rounded-xl py-3 text-lg hover:bg-yellow-300">
+        Commencer la main →
+      </button>
+    </div>
+  `;
+}
+
+function selectPos(pos) {
+  S.my_pos = pos;
+  renderGame();
+}
+
+async function startHand() {
+  const pos = S.my_pos;
+  if (!pos) return showToast('Sélectionnez une position', 'warn');
+  const c1 = getCard('h1') || '';
+  const c2 = getCard('h2') || '';
+  try {
+    const state = await api('/api/hand/start', { my_pos: pos, c1, c2 });
+    state.username = S.username;
+    S = state;
+    cardSels = {};
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+// --- ACTION BLOCK ---
+function renderAction(street, nextStep) {
+  const toAct = S.to_act_list || [];
+  const active = S.active_players || [];
+  const pot = S.hand_data?.pot_total || 0;
+  const board = S.hand_data?.board || '';
+  const myCards = S.hand_data?.my_cards || '';
+  const currentBet = S.current_bet || 0;
+  const history = S.history || [];
+
+  let content = '';
+
+  // Board display
+  if (board) {
+    content += `<div class="text-center mb-4 py-3 bg-gray-800 rounded-xl border border-gray-700">
+      <div class="text-xs text-gray-500 mb-1 uppercase tracking-widest">${street} — Board</div>
+      <div class="text-2xl">${formatBoard(board)}</div>
+    </div>`;
+  }
+
+  // My cards
+  if (myCards) {
+    const cards = [];
+    for (let i = 0; i < myCards.length; i += 2) cards.push(myCards.slice(i, i+2));
+    content += `<div class="text-center mb-3 text-sm text-gray-400">Vos cartes : <span class="text-white font-bold text-lg">${cards.map(c => `<span class="mr-1">${formatCard(c)}</span>`).join('')}</span></div>`;
+  }
+
+  // POT
+  content += `<div class="text-center mb-5">
+    <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">POT</div>
+    <div class="text-4xl font-black text-yellow-400">${Math.round(pot).toLocaleString('fr-FR')}</div>
+    ${currentBet > 0 ? `<div class="text-sm text-gray-400 mt-1">Mise courante: ${Math.round(currentBet).toLocaleString('fr-FR')}</div>` : ''}
+  </div>`;
+
+  if (active.length === 1) {
+    // One player left — fold winner
+    const winner = active[0];
+    const isHero = winner === S.my_pos;
+    content += `<div class="bg-green-900 border border-green-500 rounded-xl p-5 text-center mb-4">
+      <div class="text-green-300 font-bold text-lg">${winner}${isHero ? ' (Toi)' : ''} remporte le pot !</div>
+      <div class="text-gray-400 text-sm mt-1">Tous les autres joueurs ont fold.</div>
+    </div>
+    <button onclick="saveFoldWin()" class="w-full bg-green-500 text-black font-black rounded-xl py-3 text-lg hover:bg-green-400">
+      Confirmer la victoire
+    </button>`;
+  } else if (toAct.length === 0) {
+    // Street done
+    const nextLabel = { 'FLOP_CARDS': 'Dévoiler le Flop', 'TURN_CARD': 'Dévoiler le Turn', 'RIVER_CARD': 'Dévoiler le River', 'RESULTAT': 'Aller au Résultat' };
+    content += `<div class="text-center text-green-400 font-bold mb-4 py-3 bg-green-900/30 rounded-xl border border-green-800">
+      ✓ Tour ${street} terminé
+    </div>
+    <button onclick="nextStreet('${nextStep}')" class="w-full bg-blue-500 text-white font-black rounded-xl py-3 text-lg hover:bg-blue-400">
+      ${nextLabel[nextStep] || 'Suite →'}
+    </button>`;
+  } else {
+    // Active betting
+    const current = toAct[0];
+    const isHeroTurn = current === S.my_pos;
+
+    content += `<div class="mb-4">
+      <div class="text-xs text-gray-500 uppercase tracking-widest mb-2 text-center">Joueurs</div>
+      <div class="flex flex-wrap gap-2 justify-center">${renderRadar(toAct)}</div>
+    </div>`;
+
+    content += `<div class="text-center text-sm mb-4 ${isHeroTurn ? 'text-yellow-400 font-bold' : 'text-gray-400'}">
+      ${isHeroTurn ? '👉 Votre tour d\'agir' : `Au tour de : ${current}`}
+    </div>`;
+
+    if (S.is_raising) {
+      content += renderRaisePanel(street);
+    } else {
+      const invested = S.player_invested_street || {};
+      const alreadyIn = invested[current] || 0;
+      const costToCall = Math.max(0, currentBet - alreadyIn);
+      const callLabel = costToCall > 0 ? `Call ${Math.round(costToCall).toLocaleString('fr-FR')}` : 'Check';
+
+      content += `<div class="grid grid-cols-3 gap-3 mb-4">
+        <button onclick="doFold('${street}')" class="bg-red-700 hover:bg-red-600 text-white font-black rounded-xl py-3">Fold</button>
+        <button onclick="doCall('${street}')" class="bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl py-3">${callLabel}</button>
+        <button onclick="triggerRaise()" class="bg-yellow-400 hover:bg-yellow-300 text-black font-black rounded-xl py-3">Raise</button>
+      </div>`;
+    }
+  }
+
+  // Undo
+  if (history.length > 0) {
+    content += `<button onclick="doUndo()" class="mt-3 w-full text-gray-400 hover:text-yellow-400 text-sm py-2 border border-gray-700 rounded-xl hover:border-yellow-400 transition">
+      ↩ Annuler dernière action
+    </button>`;
+  }
+
+  return `<div class="max-w-xl mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-black text-white">${street}</h2>
+      <span class="text-xs bg-gray-700 text-gray-300 px-3 py-1 rounded-full">${active.length} joueurs actifs</span>
+    </div>
+    ${content}
+  </div>`;
+}
+
+function renderRaisePanel(street) {
+  const bb = S.bb_val || 1000;
+  const currentBet = S.current_bet || 0;
+  const minRaise = currentBet > 0 ? currentBet * 2 : bb * 2;
+
+  return `<div class="bg-gray-800 border border-yellow-400/50 rounded-xl p-4 mb-4">
+    <div class="text-sm font-bold text-yellow-400 mb-3">Montant du raise</div>
+    <div class="flex gap-3 mb-3">
+      <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+        <input type="radio" name="raise-type" value="jetons" checked class="accent-yellow-400" onchange="updateRaiseInput()" /> Jetons
+      </label>
+      <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+        <input type="radio" name="raise-type" value="bb" class="accent-yellow-400" onchange="updateRaiseInput()" /> Big Blinds
+      </label>
+    </div>
+    <input id="raise-amount" type="number" value="${Math.round(minRaise)}" min="0" step="100"
+      class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-3" />
+    <div class="flex gap-2">
+      <button onclick="submitRaise('${street}')" class="flex-1 bg-yellow-400 text-black font-bold rounded-lg py-2 hover:bg-yellow-300">Confirmer</button>
+      <button onclick="cancelRaise()" class="flex-1 bg-gray-700 text-gray-300 rounded-lg py-2 hover:bg-gray-600">Annuler</button>
+    </div>
+    <div class="flex gap-2 mt-2 flex-wrap">
+      ${[2, 2.5, 3, 4].map(x => `<button onclick="setRaiseQuick(${x})" class="bg-gray-700 hover:bg-gray-600 text-xs rounded px-2 py-1">${x}x (${Math.round(x * (currentBet || bb)).toLocaleString('fr-FR')})</button>`).join('')}
+      <button onclick="setRaisePot()" class="bg-gray-700 hover:bg-gray-600 text-xs rounded px-2 py-1">Pot (${Math.round(S.hand_data?.pot_total || 0).toLocaleString('fr-FR')})</button>
+    </div>
+  </div>`;
+}
+
+function setRaiseQuick(mult) {
+  const currentBet = S.current_bet || S.bb_val || 1000;
+  const val = Math.round(mult * currentBet);
+  const input = document.getElementById('raise-amount');
+  if (input) {
+    const type = document.querySelector('input[name="raise-type"]:checked')?.value;
+    if (type === 'bb') {
+      input.value = (val / (S.bb_val || 1000)).toFixed(2);
+    } else {
+      input.value = val;
+    }
+  }
+}
+
+function setRaisePot() {
+  const pot = S.hand_data?.pot_total || 0;
+  const input = document.getElementById('raise-amount');
+  if (input) {
+    const type = document.querySelector('input[name="raise-type"]:checked')?.value;
+    if (type === 'bb') {
+      input.value = (pot / (S.bb_val || 1000)).toFixed(2);
+    } else {
+      input.value = Math.round(pot);
+    }
+  }
+}
+
+function updateRaiseInput() {
+  // just leave current value, user can type
+}
+
+function triggerRaise() {
+  S.is_raising = true;
+  renderGame();
+}
+
+function cancelRaise() {
+  S.is_raising = false;
+  renderGame();
+}
+
+async function submitRaise(street) {
+  const input = document.getElementById('raise-amount');
+  let amount = parseFloat(input?.value || '0');
+  const type = document.querySelector('input[name="raise-type"]:checked')?.value;
+  if (type === 'bb') amount = amount * (S.bb_val || 1000);
+  if (!amount || amount <= 0) return showToast('Montant invalide', 'error');
+  S.is_raising = false;
+  try {
+    const state = await api('/api/action/raise', { street, amount });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+// --- SET CARDS ---
+function renderSetCards(label, count, keys, nextStep) {
+  keys.forEach(k => { if (!cardSels[k]) initCardPicker(k); });
+  const board = S.hand_data?.board || '';
+  let html = '';
+  if (board) {
+    html += `<div class="text-center mb-4 text-xl">${formatBoard(board)}</div>`;
+  }
+  html += `<div class="grid grid-cols-${count === 3 ? '3' : '1'} gap-3 mb-4">`;
+  keys.forEach((k, i) => { html += renderCardPicker(k, `Carte ${i + 1}`); });
+  html += `</div>`;
+  html += `<button onclick="submitCards([${keys.map(k => `'${k}'`).join(',')}], '${nextStep}')"
+    class="w-full bg-blue-500 text-white font-black rounded-xl py-3 text-lg hover:bg-blue-400">
+    Confirmer le ${label} →
+  </button>`;
+
+  return `<div class="max-w-xl mx-auto">
+    <h2 class="text-lg font-black text-white mb-4">Cartes du ${label}</h2>
+    ${html}
+  </div>`;
+}
+
+async function submitCards(keys, nextStep) {
+  const cards = keys.map(k => getCard(k)).filter(Boolean);
+  try {
+    const state = await api('/api/action/set-cards', { cards, next_step: nextStep });
+    state.username = S.username;
+    S = state;
+    keys.forEach(k => { cardSels[k] = { v: null, s: null }; });
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+// --- RESULT ---
+function renderResult() {
+  const active = S.active_players || [];
+  const pot = S.hand_data?.pot_total || 0;
+  const board = S.hand_data?.board || '';
+  const myCards = S.hand_data?.my_cards || '';
+
+  initCardPicker('wc1');
+  initCardPicker('wc2');
+
+  const winnerBtns = active.map(p => {
+    const sel = S._winner_sel === p ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-white hover:bg-gray-600';
+    return `<button onclick="selectWinner('${p}')" class="${sel} px-4 py-2 rounded-lg font-bold text-sm border border-gray-600">${p}${p === S.my_pos ? ' (Toi)' : ''}</button>`;
+  }).join('');
+
+  return `<div class="max-w-xl mx-auto">
+    <h2 class="text-xl font-black text-yellow-400 mb-4">🏆 Résultat</h2>
+    ${board ? `<div class="text-center mb-4 text-2xl bg-gray-800 rounded-xl p-3 border border-gray-700">${formatBoard(board)}</div>` : ''}
+    ${myCards ? `<div class="text-center mb-3 text-sm text-gray-400">Vos cartes : <span class="text-white font-bold text-lg">${(() => { const c=[]; for(let i=0;i<myCards.length;i+=2)c.push(myCards.slice(i,i+2)); return c.map(x=>`<span class="mr-1">${formatCard(x)}</span>`).join(''); })()}</span></div>` : ''}
+    <div class="text-center mb-5">
+      <div class="text-xs text-gray-500 uppercase tracking-widest mb-1">POT FINAL</div>
+      <div class="text-4xl font-black text-yellow-400">${Math.round(pot).toLocaleString('fr-FR')}</div>
+    </div>
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
+      <div class="text-sm font-bold text-gray-300 mb-3">Qui remporte le pot ?</div>
+      <div class="flex flex-wrap gap-2">${winnerBtns}</div>
+    </div>
+    <div class="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-4">
+      <div class="text-sm font-bold text-gray-300 mb-3">Cartes du gagnant (optionnel)</div>
+      <div class="grid grid-cols-2 gap-3">
+        ${renderCardPicker('wc1', 'Carte 1')}
+        ${renderCardPicker('wc2', 'Carte 2')}
+      </div>
+    </div>
+    <button onclick="saveHand()" class="w-full bg-green-500 text-black font-black rounded-xl py-3 text-lg hover:bg-green-400">
+      Sauvegarder la main
+    </button>
+  </div>`;
+}
+
+function selectWinner(pos) {
+  S._winner_sel = pos;
+  renderGame();
+}
+
+async function saveHand() {
+  const winner = S._winner_sel;
+  if (!winner) return showToast('Sélectionnez le gagnant', 'warn');
+  const wc1 = getCard('wc1') || '';
+  const wc2 = getCard('wc2') || '';
+  const winner_cards = [wc1, wc2].filter(Boolean).join('');
+  try {
+    const state = await api('/api/hand/save', { winner, winner_cards });
+    state.username = S.username;
+    S = state;
+    delete S._winner_sel;
+    cardSels = {};
+    updateSidebar();
+    showToast('Main sauvegardée !');
+    renderGame();
+  } catch (e) {}
+}
+
+// --- Actions ---
+async function doFold(street) {
+  try {
+    const state = await api('/api/action/fold', { street });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+async function doCall(street) {
+  try {
+    const state = await api('/api/action/call', { street });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+async function nextStreet(nextStep) {
+  try {
+    const state = await api('/api/action/next-street', { next_step: nextStep });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+async function saveFoldWin() {
+  try {
+    const state = await api('/api/action/fold-winner', {});
+    state.username = S.username;
+    S = state;
+    cardSels = {};
+    updateSidebar();
+    showToast('Main sauvegardée !');
+    renderGame();
+  } catch (e) {}
+}
+
+async function doUndo() {
+  try {
+    const state = await api('/api/undo', {});
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+async function loadStats() {
+  await loadTournaments();
+  const tournament = document.getElementById('stats-tourney')?.value || '';
+  try {
+    const data = await api('/api/stats' + (tournament ? `?tournament=${encodeURIComponent(tournament)}` : ''));
+
+    document.getElementById('stat-hands').textContent = data.total_hands || 0;
+    const profit = data.total_profit || 0;
+    const profitEl = document.getElementById('stat-profit');
+    profitEl.textContent = (profit >= 0 ? '+' : '') + Math.round(profit).toLocaleString('fr-FR');
+    profitEl.className = `text-2xl font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`;
+    document.getElementById('stat-tourneys').textContent = (data.tournaments || []).length;
+
+    // Chart
+    const sh = data.stack_history || [];
+    const labels = sh.map((x, i) => x.heure || `M${i+1}`);
+    const values = sh.map(x => x.stack || 0);
+    const ctx = document.getElementById('stack-chart');
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Stack',
+          data: values,
+          borderColor: '#facc15',
+          backgroundColor: 'rgba(250,204,21,0.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.4,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#9ca3af', maxTicksLimit: 10 }, grid: { color: '#374151' } },
+          y: { ticks: { color: '#9ca3af' }, grid: { color: '#374151' } }
+        }
+      }
+    });
+
+    // Table
+    const tbody = document.getElementById('stats-table-body');
+    tbody.innerHTML = (data.hands || []).map(h => {
+      const prof = h.profit || 0;
+      const profCls = prof >= 0 ? 'text-green-400' : 'text-red-400';
+      const profStr = (prof >= 0 ? '+' : '') + Math.round(prof).toLocaleString('fr-FR');
+      return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+        <td class="px-4 py-3 text-gray-400">${h.heure || '—'}</td>
+        <td class="px-4 py-3 text-gray-300 truncate max-w-[120px]">${h.tournament || '—'}</td>
+        <td class="px-4 py-3"><span class="bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs font-mono">${h.position || '—'}</span></td>
+        <td class="px-4 py-3 font-mono">${h.my_cards ? formatCardsStr(h.my_cards) : '—'}</td>
+        <td class="px-4 py-3 text-gray-300">${h.winner || '—'}</td>
+        <td class="px-4 py-3 text-right font-bold ${profCls}">${profStr}</td>
+        <td class="px-4 py-3 text-right text-gray-300">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Aucune main enregistrée</td></tr>`;
+
+  } catch (e) {}
+}
+
+function formatCardsStr(s) {
+  const cards = [];
+  for (let i = 0; i < s.length; i += 2) cards.push(s.slice(i, i+2));
+  return cards.map(c => `<span class="mr-1">${formatCard(c)}</span>`).join('');
+}
+
+function exportExcel() {
+  const tournament = document.getElementById('stats-tourney')?.value || '';
+  window.location = '/api/export' + (tournament ? `?tournament=${encodeURIComponent(tournament)}` : '');
+}
+
+// ---------------------------------------------------------------------------
+// Villain Notes
+// ---------------------------------------------------------------------------
+async function loadVillainNotes() {
+  try {
+    const data = await api('/api/villain-notes');
+    const notes = data.notes || [];
+    const list = document.getElementById('vn-list');
+    list.innerHTML = notes.map(n => `
+      <div class="bg-gray-700/50 rounded-lg p-2 border border-gray-600">
+        <div class="font-semibold text-yellow-400 text-xs">${n.player_name}</div>
+        <div class="text-gray-300 mt-0.5">${n.note}</div>
+      </div>
+    `).join('') || '<div class="text-gray-600 text-xs">Aucune note</div>';
+  } catch (e) {}
+}
+
+async function saveVillainNote() {
+  const player_name = document.getElementById('vn-name').value.trim();
+  const note = document.getElementById('vn-note').value.trim();
+  if (!player_name) return showToast('Nom du joueur requis', 'warn');
+  try {
+    await api('/api/villain-notes', { player_name, note });
+    document.getElementById('vn-name').value = '';
+    document.getElementById('vn-note').value = '';
+    showToast('Note sauvegardée');
+    loadVillainNotes();
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+async function init() {
+  // Try to restore session
+  try {
+    const state = await api('/api/state');
+    if (state && state.step) {
+      S = state;
+      // Try to get username from session cookie — we can't, so just leave it
+      updateSidebar();
+      if (S.step === 'SETUP' || !S.tournoi) {
+        await loadTournaments();
+        showView('setup');
+      } else {
+        showView('game');
+      }
+      loadVillainNotes();
+      return;
+    }
+  } catch (e) {}
+  showView('login');
+}
+
+init();
+</script>
+</body>
+</html>
