@@ -232,6 +232,10 @@
         <button onclick="exportExcel()" class="bg-green-600 text-white font-bold rounded-lg px-4 py-2 text-sm hover:bg-green-500">
           Export Excel
         </button>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="filter-favorites" onchange="loadStats()" class="accent-yellow-400" />
+          <span>⭐ Favoris seulement</span>
+        </label>
         <button onclick="showView('game')" class="bg-gray-700 text-white rounded-lg px-4 py-2 text-sm hover:bg-gray-600">
           ← Retour
         </button>
@@ -272,6 +276,7 @@
             <th class="px-4 py-3 text-left">Gagnant</th>
             <th class="px-4 py-3 text-right">Profit</th>
             <th class="px-4 py-3 text-right">Stack</th>
+            <th class="px-4 py-3 text-center">⭐</th>
             <th class="px-4 py-3 text-center">Détail</th>
           </tr>
         </thead>
@@ -1010,8 +1015,13 @@ async function doUndo() {
 async function loadStats() {
   await loadTournaments();
   const tournament = document.getElementById('stats-tourney')?.value || '';
+  const favOnly = document.getElementById('filter-favorites')?.checked;
+  const url = '/api/stats' + (tournament || favOnly ? '?' : '') +
+      (tournament ? `tournament=${encodeURIComponent(tournament)}` : '') +
+      (tournament && favOnly ? '&' : '') +
+      (favOnly ? 'favorites=1' : '');
   try {
-    const data = await api('/api/stats' + (tournament ? `?tournament=${encodeURIComponent(tournament)}` : ''));
+    const data = await api(url);
 
     document.getElementById('stat-hands').textContent = data.total_hands || 0;
     const profit = data.total_profit || 0;
@@ -1061,6 +1071,7 @@ async function loadStats() {
       const profCls = prof >= 0 ? 'text-green-400' : 'text-red-400';
       const profStr = (prof >= 0 ? '+' : '') + Math.round(prof).toLocaleString('fr-FR');
       const hasActions = h.actions && h.actions.length > 0;
+      const isFav = h.is_favorite;
       return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onclick="showHandDetail(${idx})" title="Cliquer pour voir le détail">
         <td class="px-4 py-3 text-gray-400">${h.heure || '—'}</td>
         <td class="px-4 py-3 text-gray-300 truncate max-w-[120px]">${h.tournament || '—'}</td>
@@ -1069,11 +1080,32 @@ async function loadStats() {
         <td class="px-4 py-3 text-gray-300">${h.winner || '—'}</td>
         <td class="px-4 py-3 text-right font-bold ${profCls}">${profStr}</td>
         <td class="px-4 py-3 text-right text-gray-300">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</td>
+        <td class="px-4 py-3 text-center" onclick="event.stopPropagation(); toggleFavorite(${idx}, ${h.id || 'null'}, ${!isFav})">
+          <span class="text-xl cursor-pointer hover:scale-125 transition-transform inline-block" title="${isFav ? 'Retirer des favoris' : 'Marquer à analyser'}">${isFav ? '⭐' : '☆'}</span>
+        </td>
         <td class="px-4 py-3 text-center">${hasActions ? '<span class="text-yellow-400 text-xs">🔍 Voir</span>' : '<span class="text-gray-600 text-xs">—</span>'}</td>
       </tr>`;
-    }).join('') || `<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">Aucune main enregistrée</td></tr>`;
+    }).join('') || `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Aucune main enregistrée</td></tr>`;
 
   } catch (e) {}
+}
+
+async function toggleFavorite(idx, handId, newVal) {
+  try {
+    await api('/api/hand/favorite', { id: handId, idx, favorite: newVal });
+    if (window._statsHands && window._statsHands[idx]) {
+      window._statsHands[idx].is_favorite = newVal;
+    }
+    // Met à jour juste l'étoile sans recharger tout
+    const rows = document.querySelectorAll('#stats-table-body tr');
+    if (rows[idx]) {
+      const star = rows[idx].querySelector('td:nth-child(8) span');
+      if (star) {
+        star.textContent = newVal ? '⭐' : '☆';
+        star.title = newVal ? 'Retirer des favoris' : 'Marquer à analyser';
+      }
+    }
+  } catch(e) {}
 }
 
 function showHandDetail(idx) {
@@ -1105,6 +1137,7 @@ function showHandDetail(idx) {
   }).join('');
 
   document.getElementById('hand-modal-content').innerHTML = `
+    ${h.is_favorite ? '<div class="inline-block bg-yellow-500/20 text-yellow-400 text-xs px-2 py-0.5 rounded mb-3">⭐ À analyser</div>' : ''}
     <div class="flex justify-between items-start mb-4">
       <div>
         <div class="text-xs text-gray-400">${h.tournament || ''} · ${h.heure || ''}</div>

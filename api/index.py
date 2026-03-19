@@ -76,6 +76,7 @@ def init_db():
                 for col_sql in [
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS board TEXT DEFAULT ''",
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS actions JSONB DEFAULT '[]'",
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE",
                 ]:
                     cur.execute(col_sql)
             conn.commit()
@@ -772,26 +773,80 @@ def undo():
     return jsonify(state)
 
 
+@app.route('/api/hand/favorite', methods=['POST'])
+@require_auth
+def toggle_favorite():
+    username = session['username']
+    data = request.get_json(force=True)
+    hand_id = data.get('id')         # id DB (int) ou None si mémoire
+    hand_idx = data.get('idx')       # index dans _mem_hands
+    favorite = bool(data.get('favorite'))
+
+    # Mise à jour DB si disponible
+    if DB_AVAILABLE and hand_id:
+        try:
+            with get_db() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE hands SET is_favorite=%s WHERE id=%s AND username=%s",
+                        (favorite, hand_id, username)
+                    )
+                conn.commit()
+        except Exception as e:
+            print(f'toggle_favorite error: {e}')
+
+    # Mise à jour fallback mémoire
+    if hand_idx is not None and 0 <= hand_idx < len(_mem_hands):
+        _mem_hands[hand_idx]['is_favorite'] = favorite
+
+    return jsonify({'ok': True, 'favorite': favorite})
+
+
 @app.route('/api/stats', methods=['GET'])
 @require_auth
 def get_stats():
     username = session['username']
     tournament = request.args.get('tournament', '')
+    fav_only = request.args.get('favorites') == '1'
 
     rows = []
     if DB_AVAILABLE:
         try:
             with get_db() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    if tournament:
+                    if tournament and fav_only:
                         cur.execute("""
-                            SELECT * FROM hands
+                            SELECT id, username, tournament, heure, position, my_cards,
+                                   board, winner, winner_cards, actions, profit, new_stack,
+                                   created_at, is_favorite
+                            FROM hands
+                            WHERE username=%s AND tournament=%s AND is_favorite = TRUE
+                            ORDER BY created_at ASC
+                        """, (username, tournament))
+                    elif tournament:
+                        cur.execute("""
+                            SELECT id, username, tournament, heure, position, my_cards,
+                                   board, winner, winner_cards, actions, profit, new_stack,
+                                   created_at, is_favorite
+                            FROM hands
                             WHERE username=%s AND tournament=%s
                             ORDER BY created_at ASC
                         """, (username, tournament))
+                    elif fav_only:
+                        cur.execute("""
+                            SELECT id, username, tournament, heure, position, my_cards,
+                                   board, winner, winner_cards, actions, profit, new_stack,
+                                   created_at, is_favorite
+                            FROM hands
+                            WHERE username=%s AND is_favorite = TRUE
+                            ORDER BY created_at ASC
+                        """, (username,))
                     else:
                         cur.execute("""
-                            SELECT * FROM hands
+                            SELECT id, username, tournament, heure, position, my_cards,
+                                   board, winner, winner_cards, actions, profit, new_stack,
+                                   created_at, is_favorite
+                            FROM hands
                             WHERE username=%s
                             ORDER BY created_at ASC
                         """, (username,))
@@ -803,6 +858,8 @@ def get_stats():
         rows = [h for h in _mem_hands if h.get('username') == username]
         if tournament:
             rows = [h for h in rows if h.get('tournament') == tournament]
+        if fav_only:
+            rows = [h for h in rows if h.get('is_favorite')]
 
     total_profit = sum(r.get('profit') or 0 for r in rows)
     total_hands = len(rows)
@@ -832,6 +889,7 @@ def get_stats():
             except: r['actions'] = []
         if r.get('actions') is None:
             r['actions'] = []
+        r['is_favorite'] = bool(r.get('is_favorite', False))
 
     return jsonify({
         'hands': last_hands,
