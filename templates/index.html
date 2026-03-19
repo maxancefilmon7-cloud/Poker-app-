@@ -407,10 +407,6 @@
         🗑 Supprimer le tournoi actuel
       </button>
       <div class="border-t border-gray-700 pt-3">
-        <div class="text-xs text-gray-500 uppercase tracking-wide mb-2">Danger zone</div>
-        <button onclick="settingsResetHand()" class="w-full bg-orange-700 hover:bg-orange-600 text-white font-bold rounded-lg py-2 text-sm mb-2">
-          ↺ Annuler la main en cours
-        </button>
         <button onclick="settingsGoSetup()" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold rounded-lg py-2 text-sm">
           🏠 Retour à la gestion des tournois
         </button>
@@ -490,11 +486,11 @@ function settingsGoSetup() {
 // Positions par taille de table
 // ---------------------------------------------------------------------------
 const POSITIONS_BY_SIZE = {
-  6:  ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
-  7:  ['UTG', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
-  8:  ['UTG', 'UTG+1', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
-  9:  ['UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
-  10: ['UTG', 'UTG+1', 'UTG+2', 'MP', 'MP+1', 'HJ', 'CO', 'BTN', 'SB', 'BB'],
+  6:  ['BTN', 'SB', 'BB', 'UTG', 'HJ', 'CO'],
+  7:  ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'HJ', 'CO'],
+  8:  ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'UTG+2', 'HJ', 'CO'],
+  9:  ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'UTG+2', 'MP', 'HJ', 'CO'],
+  10: ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'UTG+2', 'UTG+3', 'MP', 'HJ', 'CO'],
 };
 function getTableSize() {
   return parseInt(localStorage.getItem('table_size') || '9');
