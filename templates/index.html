@@ -41,7 +41,11 @@
 
   <!-- Stack & tournoi -->
   <div class="p-4 border-b border-gray-700">
-    <div class="text-xs text-gray-500 uppercase tracking-wide">Tournoi</div>
+    <div class="flex items-center justify-between mb-1">
+      <div class="text-xs text-gray-500 uppercase tracking-wide">Tournoi</div>
+      <button onclick="openTournamentSwitcher()" title="Changer / créer un tournoi"
+        class="text-yellow-400 hover:text-yellow-300 font-black text-lg leading-none px-1 rounded hover:bg-gray-700">＋</button>
+    </div>
     <div id="sb-tournoi" class="text-white font-semibold truncate">—</div>
     <div class="text-xs text-gray-500 uppercase tracking-wide mt-2">Stack</div>
     <div id="sb-stack" class="text-yellow-400 font-black text-xl">—</div>
@@ -295,6 +299,51 @@
       <button onclick="document.getElementById('hand-modal').classList.add('hidden')" class="text-gray-400 hover:text-white text-xl font-bold">✕</button>
     </div>
     <div id="hand-modal-content" class="p-5 max-h-[70vh] overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- MODAL CHANGEMENT DE TOURNOI -->
+<div id="tourney-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.75)" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div class="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-md shadow-2xl">
+    <div class="flex justify-between items-center px-5 py-4 border-b border-gray-700">
+      <h3 class="font-black text-lg text-yellow-400">🏆 Changer de Tournoi</h3>
+      <button onclick="document.getElementById('tourney-modal').classList.add('hidden')" class="text-gray-400 hover:text-white text-xl font-bold">✕</button>
+    </div>
+    <div class="p-5">
+      <!-- Tabs -->
+      <div class="flex gap-2 mb-4">
+        <button onclick="tmTab('switch')" id="tm-tab-switch" class="flex-1 py-2 rounded-lg text-sm font-bold bg-yellow-400 text-black">Reprendre</button>
+        <button onclick="tmTab('create')" id="tm-tab-create" class="flex-1 py-2 rounded-lg text-sm font-bold bg-gray-700 text-gray-300 hover:bg-gray-600">Nouveau ＋</button>
+      </div>
+
+      <!-- Reprendre un existant -->
+      <div id="tm-panel-switch">
+        <select id="tm-existing" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-3">
+          <option value="">Chargement...</option>
+        </select>
+        <div class="text-xs text-gray-400 mb-1">Ante :</div>
+        <div class="flex gap-3 mb-4">
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="0" checked class="accent-yellow-400" /> Aucun</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="12.5" class="accent-yellow-400" /> 12.5%</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="25" class="accent-yellow-400" /> 25%</label>
+        </div>
+        <button onclick="tmResume()" class="w-full bg-yellow-400 text-black font-bold rounded-lg py-2 hover:bg-yellow-300">Reprendre ce tournoi 🎮</button>
+      </div>
+
+      <!-- Créer nouveau -->
+      <div id="tm-panel-create" class="hidden">
+        <input id="tm-name" type="text" placeholder="Nom du tournoi" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-2" />
+        <input id="tm-stack" type="number" placeholder="Stack de départ (jetons)" value="20000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-2" />
+        <input id="tm-level" type="text" placeholder="Blinds (ex: 500/1000)" value="500/1000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-3" />
+        <div class="text-xs text-gray-400 mb-1">Ante :</div>
+        <div class="flex gap-3 mb-4">
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="0" checked class="accent-yellow-400" /> Aucun</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="12.5" class="accent-yellow-400" /> 12.5%</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="25" class="accent-yellow-400" /> 25%</label>
+        </div>
+        <button onclick="tmCreate()" class="w-full bg-green-500 text-black font-bold rounded-lg py-2 hover:bg-green-400">Lancer ce tournoi 🚀</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1177,6 +1226,52 @@ function formatCardsStr(s) {
 function exportExcel() {
   const tournament = document.getElementById('stats-tourney')?.value || '';
   window.location = '/api/export' + (tournament ? `?tournament=${encodeURIComponent(tournament)}` : '');
+}
+
+// ---------------------------------------------------------------------------
+// Modal changement / création de tournoi
+// ---------------------------------------------------------------------------
+async function openTournamentSwitcher() {
+  const data = await api('/api/tournaments');
+  const tourneys = data.tournaments || [];
+  const sel = document.getElementById('tm-existing');
+  sel.innerHTML = tourneys.length
+    ? tourneys.map(t => `<option value="${t}">${t}</option>`).join('')
+    : '<option value="">Aucun tournoi trouvé</option>';
+  if (S.tournoi) sel.value = S.tournoi;
+  tmTab('switch');
+  document.getElementById('tourney-modal').classList.remove('hidden');
+}
+
+function tmTab(tab) {
+  document.getElementById('tm-panel-switch').classList.toggle('hidden', tab !== 'switch');
+  document.getElementById('tm-panel-create').classList.toggle('hidden', tab !== 'create');
+  document.getElementById('tm-tab-switch').className = `flex-1 py-2 rounded-lg text-sm font-bold ${tab === 'switch' ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
+  document.getElementById('tm-tab-create').className = `flex-1 py-2 rounded-lg text-sm font-bold ${tab === 'create' ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`;
+}
+
+async function tmResume() {
+  const name = document.getElementById('tm-existing').value;
+  if (!name) return showToast('Sélectionne un tournoi', 'error');
+  const ante = document.querySelector('input[name="tm-ante-s"]:checked')?.value || '0';
+  const state = await api('/api/tournament/resume', { name, ante: parseFloat(ante) });
+  state.username = S.username;
+  document.getElementById('tourney-modal').classList.add('hidden');
+  setState(state);
+  showToast(`Tournoi "${name}" repris !`);
+}
+
+async function tmCreate() {
+  const name = document.getElementById('tm-name').value.trim();
+  const stack = parseFloat(document.getElementById('tm-stack').value) || 20000;
+  const level = document.getElementById('tm-level').value.trim() || '500/1000';
+  const ante = document.querySelector('input[name="tm-ante-c"]:checked')?.value || '0';
+  if (!name) return showToast('Entre un nom de tournoi', 'error');
+  const state = await api('/api/tournament/create', { name, stack, level, ante: parseFloat(ante) });
+  state.username = S.username;
+  document.getElementById('tourney-modal').classList.add('hidden');
+  setState(state);
+  showToast(`Tournoi "${name}" créé !`);
 }
 
 // ---------------------------------------------------------------------------

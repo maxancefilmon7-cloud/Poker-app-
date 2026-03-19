@@ -18,27 +18,18 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-me')
 DATABASE_URL = os.environ.get('POSTGRES_URL', '')
 
 # ---------------------------------------------------------------------------
-# Fallback mémoire (dev local sans DB)
-# ---------------------------------------------------------------------------
-_mem_states = {}   # username → state dict
-_mem_hands  = []   # list of hand dicts
-_mem_notes  = []   # list of note dicts
-DB_AVAILABLE = False  # sera mis à True si la DB répond
-
-# ---------------------------------------------------------------------------
-# DB helpers
+# DB helpers — Postgres obligatoire (pas de fallback mémoire)
 # ---------------------------------------------------------------------------
 
 def get_db():
     if not DATABASE_URL:
-        return None
+        raise RuntimeError('Base de données non configurée. Ajoute POSTGRES_URL dans les variables Vercel.')
     return psycopg2.connect(DATABASE_URL)
 
 
 def init_db():
-    global DB_AVAILABLE
     if not DATABASE_URL:
-        print('⚠️  POSTGRES_URL absent — mode mémoire (données non persistées)')
+        print('⚠️  POSTGRES_URL absent — base de données requise pour fonctionner.')
         return
     try:
         with get_db() as conn:
@@ -56,10 +47,11 @@ def init_db():
                         heure TEXT,
                         position TEXT,
                         my_cards TEXT,
-                        board TEXT,
+                        board TEXT DEFAULT '',
                         winner TEXT,
                         winner_cards TEXT,
                         actions JSONB DEFAULT '[]',
+                        is_favorite BOOLEAN DEFAULT FALSE,
                         profit REAL,
                         new_stack REAL,
                         created_at TIMESTAMPTZ DEFAULT NOW()
@@ -72,7 +64,7 @@ def init_db():
                         created_at TIMESTAMPTZ DEFAULT NOW()
                     );
                 """)
-                # Migration : ajoute les colonnes si elles n'existent pas (tables existantes)
+                # Migration colonnes pour tables existantes
                 for col_sql in [
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS board TEXT DEFAULT ''",
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS actions JSONB DEFAULT '[]'",
@@ -80,49 +72,39 @@ def init_db():
                 ]:
                     cur.execute(col_sql)
             conn.commit()
-        DB_AVAILABLE = True
     except Exception as e:
         print(f'init_db error: {e}')
 
 
 def load_state(username):
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute('SELECT state FROM game_state WHERE username=%s', (username,))
-                    row = cur.fetchone()
-                    if row and row['state']:
-                        d = default_state()
-                        d.update(dict(row['state']))
-                        return d
-        except Exception as e:
-            print(f'load_state error: {e}')
-    # fallback mémoire
-    if username in _mem_states:
-        d = default_state()
-        d.update(_mem_states[username])
-        return d
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute('SELECT state FROM game_state WHERE username=%s', (username,))
+                row = cur.fetchone()
+                if row and row['state']:
+                    d = default_state()
+                    d.update(dict(row['state']))
+                    return d
+    except Exception as e:
+        print(f'load_state error: {e}')
     return default_state()
 
 
 def persist_state(username, state):
-    # toujours sauvegarder en mémoire (backup rapide)
-    _mem_states[username] = copy.deepcopy(state)
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO game_state (username, state, updated_at)
-                        VALUES (%s, %s, NOW())
-                        ON CONFLICT (username) DO UPDATE
-                            SET state = EXCLUDED.state,
-                                updated_at = EXCLUDED.updated_at
-                    """, (username, json.dumps(state)))
-                conn.commit()
-        except Exception as e:
-            print(f'persist_state error: {e}')
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO game_state (username, state, updated_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (username) DO UPDATE
+                        SET state = EXCLUDED.state,
+                            updated_at = EXCLUDED.updated_at
+                """, (username, json.dumps(state)))
+            conn.commit()
+    except Exception as e:
+        print(f'persist_state error: {e}')
 
 
 def default_state():
@@ -199,26 +181,24 @@ def _save_hand_db(username, state, winner, winner_cards, profit):
         'new_stack': state['stack_actuel'],
         'created_at': datetime.now().isoformat(),
     }
-    _mem_hands.append(hand)  # toujours en mémoire
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO hands
-                            (username, tournament, heure, position, my_cards,
-                             board, winner, winner_cards, actions, profit, new_stack)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        hand['username'], hand['tournament'], hand['heure'],
-                        hand['position'], hand['my_cards'], hand['board'],
-                        hand['winner'], hand['winner_cards'],
-                        json.dumps(hand['actions']),
-                        hand['profit'], hand['new_stack'],
-                    ))
-                conn.commit()
-        except Exception as e:
-            print(f'_save_hand_db error: {e}')
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO hands
+                        (username, tournament, heure, position, my_cards,
+                         board, winner, winner_cards, actions, profit, new_stack)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    hand['username'], hand['tournament'], hand['heure'],
+                    hand['position'], hand['my_cards'], hand['board'],
+                    hand['winner'], hand['winner_cards'],
+                    json.dumps(hand['actions']),
+                    hand['profit'], hand['new_stack'],
+                ))
+            conn.commit()
+    except Exception as e:
+        print(f'_save_hand_db error: {e}')
 
 
 def _reset_to_start_hand(state):
@@ -782,22 +762,18 @@ def toggle_favorite():
     hand_idx = data.get('idx')       # index dans _mem_hands
     favorite = bool(data.get('favorite'))
 
-    # Mise à jour DB si disponible
-    if DB_AVAILABLE and hand_id:
-        try:
-            with get_db() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE hands SET is_favorite=%s WHERE id=%s AND username=%s",
-                        (favorite, hand_id, username)
-                    )
-                conn.commit()
-        except Exception as e:
-            print(f'toggle_favorite error: {e}')
-
-    # Mise à jour fallback mémoire
-    if hand_idx is not None and 0 <= hand_idx < len(_mem_hands):
-        _mem_hands[hand_idx]['is_favorite'] = favorite
+    if not hand_id:
+        return jsonify({'error': 'id requis'}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE hands SET is_favorite=%s WHERE id=%s AND username=%s",
+                    (favorite, hand_id, username)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
     return jsonify({'ok': True, 'favorite': favorite})
 
@@ -810,10 +786,9 @@ def get_stats():
     fav_only = request.args.get('favorites') == '1'
 
     rows = []
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     if tournament and fav_only:
                         cur.execute("""
                             SELECT id, username, tournament, heure, position, my_cards,
@@ -853,13 +828,6 @@ def get_stats():
                     rows = [dict(r) for r in cur.fetchall()]
         except Exception as e:
             print(f'get_stats DB error: {e}')
-    # fallback mémoire
-    if not rows:
-        rows = [h for h in _mem_hands if h.get('username') == username]
-        if tournament:
-            rows = [h for h in rows if h.get('tournament') == tournament]
-        if fav_only:
-            rows = [h for h in rows if h.get('is_favorite')]
 
     total_profit = sum(r.get('profit') or 0 for r in rows)
     total_hands = len(rows)
@@ -907,34 +875,28 @@ def export_excel():
     tournament = request.args.get('tournament', '')
 
     rows = []
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    if tournament:
-                        cur.execute("""
-                            SELECT id, tournament, heure, position, my_cards,
-                                   winner, winner_cards, profit, new_stack, created_at
-                            FROM hands
-                            WHERE username=%s AND tournament=%s
-                            ORDER BY created_at ASC
-                        """, (username, tournament))
-                    else:
-                        cur.execute("""
-                            SELECT id, tournament, heure, position, my_cards,
-                                   winner, winner_cards, profit, new_stack, created_at
-                            FROM hands
-                            WHERE username=%s
-                            ORDER BY created_at ASC
-                        """, (username,))
-                    rows = [dict(r) for r in cur.fetchall()]
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    # fallback mémoire
-    if not rows:
-        rows = [h for h in _mem_hands if h.get('username') == username]
-        if tournament:
-            rows = [h for h in rows if h.get('tournament') == tournament]
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if tournament:
+                    cur.execute("""
+                        SELECT id, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack, created_at
+                        FROM hands
+                        WHERE username=%s AND tournament=%s
+                        ORDER BY created_at ASC
+                    """, (username, tournament))
+                else:
+                    cur.execute("""
+                        SELECT id, tournament, heure, position, my_cards,
+                               board, winner, winner_cards, actions, profit, new_stack, created_at
+                        FROM hands
+                        WHERE username=%s
+                        ORDER BY created_at ASC
+                    """, (username,))
+                rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
     # Construit un DataFrame lisible avec les actions explodées
     export_rows = []
@@ -981,26 +943,21 @@ def export_excel():
 @require_auth
 def get_villain_notes():
     username = session['username']
-    notes = []
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("""
-                        SELECT id, player_name, note, created_at
-                        FROM villain_notes
-                        WHERE username=%s
-                        ORDER BY created_at DESC
-                    """, (username,))
-                    notes = [dict(r) for r in cur.fetchall()]
-            for n in notes:
-                if hasattr(n.get('created_at'), 'isoformat'):
-                    n['created_at'] = n['created_at'].isoformat()
-        except Exception as e:
-            print(f'get_villain_notes DB error: {e}')
-    # fallback mémoire
-    if not notes:
-        notes = [n for n in _mem_notes if n.get('username') == username]
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT id, player_name, note, created_at
+                    FROM villain_notes
+                    WHERE username=%s
+                    ORDER BY created_at DESC
+                """, (username,))
+                notes = [dict(r) for r in cur.fetchall()]
+        for n in notes:
+            if hasattr(n.get('created_at'), 'isoformat'):
+                n['created_at'] = n['created_at'].isoformat()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
     return jsonify({'notes': notes})
 
 
@@ -1014,25 +971,16 @@ def save_villain_note():
     if not player_name:
         return jsonify({'error': 'Nom du joueur requis'}), 400
 
-    entry = {
-        'username': username,
-        'player_name': player_name,
-        'note': note,
-        'created_at': datetime.now().isoformat(),
-    }
-    _mem_notes.insert(0, entry)  # toujours en mémoire
-
-    if DB_AVAILABLE:
-        try:
-            with get_db() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO villain_notes (username, player_name, note)
-                        VALUES (%s, %s, %s)
-                    """, (username, player_name, note))
-                conn.commit()
-        except Exception as e:
-            print(f'save_villain_note DB error: {e}')
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO villain_notes (username, player_name, note)
+                    VALUES (%s, %s, %s)
+                """, (username, player_name, note))
+            conn.commit()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
     return jsonify({'ok': True})
 
