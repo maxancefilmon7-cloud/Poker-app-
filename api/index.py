@@ -20,14 +20,18 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-me')
 # ---------------------------------------------------------------------------
 
 def get_db():
-    db_url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
+    db_url = (os.environ.get('POSTGRES_URL') or
+              os.environ.get('DATABASE_URL') or
+              os.environ.get('DATABASE_PUBLIC_URL', ''))
     if not db_url:
         raise RuntimeError('Base de données non configurée. Ajoute DATABASE_URL dans les variables Railway.')
     return psycopg2.connect(db_url)
 
 
 def init_db():
-    db_url = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
+    db_url = (os.environ.get('POSTGRES_URL') or
+              os.environ.get('DATABASE_URL') or
+              os.environ.get('DATABASE_PUBLIC_URL', ''))
     if not db_url:
         print('⚠️  DATABASE_URL absent — base de données requise pour fonctionner.')
         return
