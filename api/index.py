@@ -26,7 +26,11 @@ def get_db():
     if not db_url:
         raise RuntimeError('Base de données non configurée. Ajoute DATABASE_URL dans les variables Railway.')
     if 'sslmode' not in db_url:
-        db_url += ('&sslmode=require' if '?' in db_url else '?sslmode=require')
+        # URL interne Railway (railway.internal) = pas de SSL
+        if 'railway.internal' in db_url:
+            db_url += ('&sslmode=disable' if '?' in db_url else '?sslmode=disable')
+        else:
+            db_url += ('&sslmode=require' if '?' in db_url else '?sslmode=require')
     return psycopg2.connect(db_url)
 
 
