@@ -25,12 +25,29 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #1f2937; }
     ::-webkit-scrollbar-thumb { background: #374151; border-radius:3px; }
+    @media (min-width: 768px) {
+      .main-content { margin-left: 16rem; }
+    }
+    @media (max-width: 767px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+    }
   </style>
 </head>
 <body class="min-h-screen">
 
 <!-- TOAST CONTAINER -->
 <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- OVERLAY MOBILE -->
+<div id="sidebar-overlay" class="hidden fixed inset-0 bg-black bg-opacity-60 z-30 md:hidden" onclick="closeSidebar()"></div>
+
+<!-- BARRE MOBILE (visible uniquement sur téléphone) -->
+<div class="md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-3">
+  <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white text-2xl leading-none">☰</button>
+  <div class="text-yellow-400 font-black text-sm">♠ Poker Pro Tracker</div>
+  <div id="mobile-stack" class="text-yellow-400 font-bold text-sm">—</div>
+</div>
 
 <!-- SIDEBAR -->
 <aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-40 flex flex-col overflow-y-auto">
@@ -103,7 +120,7 @@
 </aside>
 
 <!-- MAIN CONTENT -->
-<main id="main-content" class="main-content min-h-screen">
+<main id="main-content" class="main-content min-h-screen pt-14 md:pt-0">
 
   <!-- LOGIN VIEW -->
   <div id="view-login" class="hidden">
@@ -364,6 +381,18 @@
 
 <script>
 // ---------------------------------------------------------------------------
+// Mobile sidebar
+// ---------------------------------------------------------------------------
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('hidden');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.add('hidden');
+}
+
+// ---------------------------------------------------------------------------
 // Global state
 // ---------------------------------------------------------------------------
 let S = {};
@@ -509,13 +538,17 @@ function showView(name) {
 
   const sidebar = document.getElementById('sidebar');
   const main = document.getElementById('main-content');
+  const isMobile = window.innerWidth < 768;
   if (name === 'login' || name === 'setup') {
     sidebar.style.transform = 'translateX(-100%)';
     main.style.marginLeft = '0';
   } else {
-    sidebar.style.transform = 'translateX(0)';
-    main.style.marginLeft = '16rem';
+    if (!isMobile) {
+      sidebar.style.transform = 'translateX(0)';
+      main.style.marginLeft = '16rem';
+    }
   }
+  closeSidebar();
 
   if (name === 'game') renderGame();
   if (name === 'stats') loadStats();
@@ -530,6 +563,8 @@ function updateSidebar() {
   document.getElementById('sb-tournoi').textContent = S.tournoi || '—';
   const stack = S.stack_actuel !== undefined ? Math.round(S.stack_actuel).toLocaleString('fr-FR') : '—';
   document.getElementById('sb-stack').textContent = stack !== '—' ? stack + ' 🪙' : '—';
+  // Mise à jour stack barre mobile
+  document.getElementById('mobile-stack').textContent = stack !== '—' ? stack + ' 🪙' : '';
   const bb = S.bb_val || 0;
   if (bb > 0 && S.stack_actuel !== undefined) {
     const bbs = (S.stack_actuel / bb).toFixed(1);
