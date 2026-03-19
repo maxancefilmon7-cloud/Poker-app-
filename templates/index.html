@@ -60,6 +60,9 @@
     <button onclick="switchToStats()" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
       📊 Statistiques
     </button>
+    <button onclick="switchToHistory()" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      📋 Historique
+    </button>
   </div>
 
   <!-- Update Blinds -->
@@ -69,13 +72,10 @@
     <div class="text-xs text-gray-400 mb-1">Ante :</div>
     <div class="flex gap-2 mb-2" id="sb-ante-group">
       <label class="flex items-center gap-1 text-xs cursor-pointer">
-        <input type="radio" name="sb-ante" value="0" checked class="accent-yellow-400" /> Aucun
+        <input type="radio" name="sb-ante" value="0" checked class="accent-yellow-400" /> Non
       </label>
       <label class="flex items-center gap-1 text-xs cursor-pointer">
-        <input type="radio" name="sb-ante" value="12.5" class="accent-yellow-400" /> 12.5%
-      </label>
-      <label class="flex items-center gap-1 text-xs cursor-pointer">
-        <input type="radio" name="sb-ante" value="25" class="accent-yellow-400" /> 25%
+        <input type="radio" name="sb-ante" value="1" class="accent-yellow-400" /> Oui (1 BB)
       </label>
     </div>
     <button onclick="updateBlinds()" class="w-full bg-yellow-400 text-black rounded px-2 py-1 text-sm font-bold hover:bg-yellow-300">
@@ -156,13 +156,10 @@
           <label class="text-xs text-gray-400 mb-2 block">Ante</label>
           <div class="flex gap-3 flex-wrap" id="c-ante-group">
             <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="c-ante" value="0" checked class="accent-yellow-400" /> Aucun
+              <input type="radio" name="c-ante" value="0" checked class="accent-yellow-400" /> Non
             </label>
             <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="c-ante" value="12.5" class="accent-yellow-400" /> 12.5% BB
-            </label>
-            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="c-ante" value="25" class="accent-yellow-400" /> 25% BB
+              <input type="radio" name="c-ante" value="1" class="accent-yellow-400" /> Oui (1 BB)
             </label>
           </div>
         </div>
@@ -187,13 +184,10 @@
           <label class="text-xs text-gray-400 mb-2 block">Ante actuel</label>
           <div class="flex gap-3 flex-wrap" id="r-ante-group">
             <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="r-ante" value="0" checked class="accent-yellow-400" /> Aucun
+              <input type="radio" name="r-ante" value="0" checked class="accent-yellow-400" /> Non
             </label>
             <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="r-ante" value="12.5" class="accent-yellow-400" /> 12.5% BB
-            </label>
-            <label class="flex items-center gap-1.5 text-sm cursor-pointer">
-              <input type="radio" name="r-ante" value="25" class="accent-yellow-400" /> 25% BB
+              <input type="radio" name="r-ante" value="1" class="accent-yellow-400" /> Oui (1 BB)
             </label>
           </div>
         </div>
@@ -268,24 +262,47 @@
       <canvas id="stack-chart" height="120"></canvas>
     </div>
 
-    <!-- Table -->
-    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-gray-700 text-gray-400 text-xs uppercase">
-            <th class="px-4 py-3 text-left">Heure</th>
-            <th class="px-4 py-3 text-left">Tournoi</th>
-            <th class="px-4 py-3 text-left">Position</th>
-            <th class="px-4 py-3 text-left">Cartes</th>
-            <th class="px-4 py-3 text-left">Gagnant</th>
-            <th class="px-4 py-3 text-right">Profit</th>
-            <th class="px-4 py-3 text-right">Stack</th>
-            <th class="px-4 py-3 text-center">⭐</th>
-            <th class="px-4 py-3 text-center">Détail</th>
-          </tr>
-        </thead>
-        <tbody id="stats-table-body"></tbody>
-      </table>
+  </div>
+
+  <!-- HISTORY VIEW -->
+  <div id="view-history" class="hidden p-4 md:p-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <h2 class="text-2xl font-black text-yellow-400">📋 Historique des mains</h2>
+      <div class="flex gap-2 items-center flex-wrap">
+        <select id="hist-tourney" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" onchange="loadHistory()">
+          <option value="">Tous les tournois</option>
+        </select>
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+          <input type="checkbox" id="hist-filter-fav" onchange="loadHistory()" class="accent-yellow-400" />
+          <span>⭐ Favoris seulement</span>
+        </label>
+        <button onclick="showView('game')" class="bg-gray-700 text-white rounded-lg px-4 py-2 text-sm hover:bg-gray-600">
+          ← Retour
+        </button>
+      </div>
+    </div>
+
+    <div id="hist-count" class="text-gray-400 text-sm mb-3"></div>
+
+    <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-700 text-gray-400 text-xs uppercase">
+              <th class="px-4 py-3 text-left">Heure</th>
+              <th class="px-4 py-3 text-left">Tournoi</th>
+              <th class="px-4 py-3 text-left">Position</th>
+              <th class="px-4 py-3 text-left">Cartes</th>
+              <th class="px-4 py-3 text-left">Gagnant</th>
+              <th class="px-4 py-3 text-right">Profit</th>
+              <th class="px-4 py-3 text-right">Stack</th>
+              <th class="px-4 py-3 text-center">⭐</th>
+              <th class="px-4 py-3 text-center">Détail</th>
+            </tr>
+          </thead>
+          <tbody id="hist-table-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -323,9 +340,8 @@
         </select>
         <div class="text-xs text-gray-400 mb-1">Ante :</div>
         <div class="flex gap-3 mb-4">
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="0" checked class="accent-yellow-400" /> Aucun</label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="12.5" class="accent-yellow-400" /> 12.5%</label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="25" class="accent-yellow-400" /> 25%</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="0" checked class="accent-yellow-400" /> Non</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-s" value="1" class="accent-yellow-400" /> Oui (1 BB)</label>
         </div>
         <button onclick="tmResume()" class="w-full bg-yellow-400 text-black font-bold rounded-lg py-2 hover:bg-yellow-300">Reprendre ce tournoi 🎮</button>
       </div>
@@ -337,9 +353,8 @@
         <input id="tm-level" type="text" placeholder="Blinds (ex: 500/1000)" value="500/1000" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm mb-3" />
         <div class="text-xs text-gray-400 mb-1">Ante :</div>
         <div class="flex gap-3 mb-4">
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="0" checked class="accent-yellow-400" /> Aucun</label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="12.5" class="accent-yellow-400" /> 12.5%</label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="25" class="accent-yellow-400" /> 25%</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="0" checked class="accent-yellow-400" /> Non</label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="tm-ante-c" value="1" class="accent-yellow-400" /> Oui (1 BB)</label>
         </div>
         <button onclick="tmCreate()" class="w-full bg-green-500 text-black font-bold rounded-lg py-2 hover:bg-green-400">Lancer ce tournoi 🚀</button>
       </div>
@@ -487,7 +502,7 @@ function renderRadar(toActList) {
 // Views
 // ---------------------------------------------------------------------------
 function showView(name) {
-  ['login', 'setup', 'game', 'stats'].forEach(v => {
+  ['login', 'setup', 'game', 'stats', 'history'].forEach(v => {
     document.getElementById(`view-${v}`).classList.add('hidden');
   });
   document.getElementById(`view-${name}`).classList.remove('hidden');
@@ -504,6 +519,7 @@ function showView(name) {
 
   if (name === 'game') renderGame();
   if (name === 'stats') loadStats();
+  if (name === 'history') loadHistory();
 }
 
 // ---------------------------------------------------------------------------
@@ -559,10 +575,10 @@ async function loadTournaments() {
   try {
     const data = await api('/api/tournaments');
     const tourneys = data.tournaments || [];
-    ['r-name', 'd-name', 'stats-tourney'].forEach(id => {
+    ['r-name', 'd-name', 'stats-tourney', 'hist-tourney'].forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
-      const defOpt = id === 'stats-tourney' ? '<option value="">Tous les tournois</option>' : '<option value="">-- Sélectionner --</option>';
+      const defOpt = (id === 'stats-tourney' || id === 'hist-tourney') ? '<option value="">Tous les tournois</option>' : '<option value="">-- Sélectionner --</option>';
       sel.innerHTML = defOpt + tourneys.map(t => `<option value="${t}">${t}</option>`).join('');
     });
   } catch (e) {}
@@ -1110,32 +1126,6 @@ async function loadStats() {
       }
     });
 
-    // Table
-    const tbody = document.getElementById('stats-table-body');
-    const hands = data.hands || [];
-    // Stocke les mains pour le modal
-    window._statsHands = hands;
-    tbody.innerHTML = hands.map((h, idx) => {
-      const prof = h.profit || 0;
-      const profCls = prof >= 0 ? 'text-green-400' : 'text-red-400';
-      const profStr = (prof >= 0 ? '+' : '') + Math.round(prof).toLocaleString('fr-FR');
-      const hasActions = h.actions && h.actions.length > 0;
-      const isFav = h.is_favorite;
-      return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onclick="showHandDetail(${idx})" title="Cliquer pour voir le détail">
-        <td class="px-4 py-3 text-gray-400">${h.heure || '—'}</td>
-        <td class="px-4 py-3 text-gray-300 truncate max-w-[120px]">${h.tournament || '—'}</td>
-        <td class="px-4 py-3"><span class="bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs font-mono">${h.position || '—'}</span></td>
-        <td class="px-4 py-3 font-mono">${h.my_cards ? formatCardsStr(h.my_cards) : '—'}</td>
-        <td class="px-4 py-3 text-gray-300">${h.winner || '—'}</td>
-        <td class="px-4 py-3 text-right font-bold ${profCls}">${profStr}</td>
-        <td class="px-4 py-3 text-right text-gray-300">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</td>
-        <td class="px-4 py-3 text-center" onclick="event.stopPropagation(); toggleFavorite(${idx}, ${h.id || 'null'}, ${!isFav})">
-          <span class="text-xl cursor-pointer hover:scale-125 transition-transform inline-block" title="${isFav ? 'Retirer des favoris' : 'Marquer à analyser'}">${isFav ? '⭐' : '☆'}</span>
-        </td>
-        <td class="px-4 py-3 text-center">${hasActions ? '<span class="text-yellow-400 text-xs">🔍 Voir</span>' : '<span class="text-gray-600 text-xs">—</span>'}</td>
-      </tr>`;
-    }).join('') || `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Aucune main enregistrée</td></tr>`;
-
   } catch (e) {}
 }
 
@@ -1144,15 +1134,6 @@ async function toggleFavorite(idx, handId, newVal) {
     await api('/api/hand/favorite', { id: handId, idx, favorite: newVal });
     if (window._statsHands && window._statsHands[idx]) {
       window._statsHands[idx].is_favorite = newVal;
-    }
-    // Met à jour juste l'étoile sans recharger tout
-    const rows = document.querySelectorAll('#stats-table-body tr');
-    if (rows[idx]) {
-      const star = rows[idx].querySelector('td:nth-child(8) span');
-      if (star) {
-        star.textContent = newVal ? '⭐' : '☆';
-        star.title = newVal ? 'Retirer des favoris' : 'Marquer à analyser';
-      }
     }
   } catch(e) {}
 }
@@ -1226,6 +1207,83 @@ function formatCardsStr(s) {
 function exportExcel() {
   const tournament = document.getElementById('stats-tourney')?.value || '';
   window.location = '/api/export' + (tournament ? `?tournament=${encodeURIComponent(tournament)}` : '');
+}
+
+// ---------------------------------------------------------------------------
+// Historique
+// ---------------------------------------------------------------------------
+function switchToHistory() {
+  showView('history');
+}
+
+async function loadHistory() {
+  await loadTournaments();
+  // Synchronise le select tournoi
+  const histSel = document.getElementById('hist-tourney');
+  const statSel = document.getElementById('stats-tourney');
+  if (histSel && statSel) {
+    histSel.innerHTML = statSel.innerHTML; // même options
+  }
+
+  const tournament = histSel?.value || '';
+  const favOnly = document.getElementById('hist-filter-fav')?.checked;
+  let url = '/api/history';
+  const params = [];
+  if (tournament) params.push(`tournament=${encodeURIComponent(tournament)}`);
+  if (favOnly) params.push('favorites=1');
+  if (params.length) url += '?' + params.join('&');
+
+  try {
+    const data = await api(url);
+    const hands = data.hands || [];
+    window._histHands = hands;
+
+    const countEl = document.getElementById('hist-count');
+    if (countEl) countEl.textContent = `${hands.length} main${hands.length > 1 ? 's' : ''} trouvée${hands.length > 1 ? 's' : ''}`;
+
+    const tbody = document.getElementById('hist-table-body');
+    tbody.innerHTML = hands.map((h, idx) => {
+      const prof = h.profit || 0;
+      const profCls = prof >= 0 ? 'text-green-400' : 'text-red-400';
+      const profStr = (prof >= 0 ? '+' : '') + Math.round(prof).toLocaleString('fr-FR');
+      const hasActions = h.actions && h.actions.length > 0;
+      const isFav = h.is_favorite;
+      return `<tr class="border-b border-gray-700/50 hover:bg-gray-700/30 cursor-pointer" onclick="showHistDetail(${idx})" title="Voir le détail">
+        <td class="px-4 py-3 text-gray-400">${h.heure || '—'}</td>
+        <td class="px-4 py-3 text-gray-300 truncate max-w-[120px]">${h.tournament || '—'}</td>
+        <td class="px-4 py-3"><span class="bg-gray-700 text-gray-200 px-2 py-0.5 rounded text-xs font-mono">${h.position || '—'}</span></td>
+        <td class="px-4 py-3 font-mono">${h.my_cards ? formatCardsStr(h.my_cards) : '—'}</td>
+        <td class="px-4 py-3 text-gray-300">${h.winner || '—'}</td>
+        <td class="px-4 py-3 text-right font-bold ${profCls}">${profStr}</td>
+        <td class="px-4 py-3 text-right text-gray-300">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</td>
+        <td class="px-4 py-3 text-center" onclick="event.stopPropagation(); toggleHistFavorite(${idx}, ${h.id || 'null'}, ${!isFav})">
+          <span class="text-xl cursor-pointer hover:scale-125 transition-transform inline-block">${isFav ? '⭐' : '☆'}</span>
+        </td>
+        <td class="px-4 py-3 text-center">${hasActions ? '<span class="text-yellow-400 text-xs">🔍 Voir</span>' : '<span class="text-gray-600 text-xs">—</span>'}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="9" class="px-4 py-8 text-center text-gray-500">Aucune main trouvée</td></tr>`;
+  } catch(e) {}
+}
+
+function showHistDetail(idx) {
+  const h = (window._histHands || [])[idx];
+  if (!h) return;
+  // Réutilise la même logique que showHandDetail
+  window._statsHands = window._histHands;
+  showHandDetail(idx);
+}
+
+async function toggleHistFavorite(idx, handId, newVal) {
+  await toggleFavorite(idx, handId, newVal);
+  // Met aussi à jour _histHands
+  if (window._histHands && window._histHands[idx]) {
+    window._histHands[idx].is_favorite = newVal;
+    const rows = document.querySelectorAll('#hist-table-body tr');
+    if (rows[idx]) {
+      const star = rows[idx].querySelector('td:nth-child(8) span');
+      if (star) star.textContent = newVal ? '⭐' : '☆';
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

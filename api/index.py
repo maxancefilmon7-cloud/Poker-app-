@@ -292,7 +292,7 @@ def tournament_create():
     try:
         stack = float(data.get('stack', 0))
         level = str(data.get('level', '500/1000'))
-        ante_pct = float(data.get('ante', 0))
+        ante = float(data.get('ante', 0))
     except (TypeError, ValueError):
         return jsonify({'error': 'Paramètres invalides'}), 400
 
@@ -303,14 +303,14 @@ def tournament_create():
     except ValueError:
         bb_val = 1000.0
 
-    ante = bb_val * ante_pct / 100.0 if ante_pct else 0.0
+    ante_chips = bb_val * ante  # ante=1 => 1 BB, ante=0 => 0
 
     state = default_state()
     state['step'] = 'START_HAND'
     state['tournoi'] = name
     state['stack_actuel'] = stack
     state['bb_val'] = bb_val
-    state['ante'] = ante
+    state['ante'] = ante_chips
     persist_state(username, state)
     return jsonify(state)
 
@@ -323,7 +323,7 @@ def tournament_resume():
     name = (data.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'Nom de tournoi requis'}), 400
-    ante_pct = float(data.get('ante', 0))
+    ante = float(data.get('ante', 0))
 
     last_stack = None
     last_bb = 1000.0
@@ -349,14 +349,14 @@ def tournament_resume():
     state['step'] = 'START_HAND'
     state['tournoi'] = name
     state['bb_val'] = last_bb
-    state['ante'] = last_bb * ante_pct / 100.0 if ante_pct else 0.0
+    state['ante'] = last_bb * ante if ante else 0.0
     if last_stack is not None:
         state['stack_actuel'] = last_stack
 
     _reset_to_start_hand(state)
     state['tournoi'] = name
     state['bb_val'] = last_bb
-    state['ante'] = last_bb * ante_pct / 100.0 if ante_pct else 0.0
+    state['ante'] = last_bb * ante if ante else 0.0
     if last_stack is not None:
         state['stack_actuel'] = last_stack
 
@@ -396,7 +396,7 @@ def tournament_update_blinds():
     username = session['username']
     data = request.get_json(force=True)
     level = str(data.get('level', '500/1000'))
-    ante_pct = float(data.get('ante', 0))
+    ante = float(data.get('ante', 0))
 
     parts = level.replace(',', '/').split('/')
     try:
@@ -410,7 +410,11 @@ def tournament_update_blinds():
         stack_in_bb = state['stack_actuel'] / old_bb
         state['stack_actuel'] = round(stack_in_bb * bb_val)
     state['bb_val'] = bb_val
-    state['ante'] = bb_val * ante_pct / 100.0 if ante_pct else 0.0
+    # Si ante envoyé explicitement, l'utiliser; sinon recalculer selon l'état actuel
+    if ante:
+        state['ante'] = bb_val * ante
+    else:
+        state['ante'] = bb_val if state.get('ante', 0) > 0 else 0.0
     persist_state(username, state)
     return jsonify(state)
 
@@ -866,6 +870,47 @@ def get_stats():
         'total_profit': total_profit,
         'stack_history': stack_history,
     })
+
+
+@app.route('/api/history', methods=['GET'])
+@require_auth
+def get_history():
+    username = session['username']
+    tournament = request.args.get('tournament', '')
+    fav_only = request.args.get('favorites') == '1'
+
+    try:
+        with get_db() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                base = """
+                    SELECT id, tournament, heure, position, my_cards,
+                           board, winner, winner_cards, actions, profit,
+                           new_stack, is_favorite, created_at
+                    FROM hands WHERE username=%s
+                """
+                params = [username]
+                if tournament:
+                    base += " AND tournament=%s"
+                    params.append(tournament)
+                if fav_only:
+                    base += " AND is_favorite = TRUE"
+                base += " ORDER BY created_at DESC"
+                cur.execute(base, params)
+                rows = [dict(r) for r in cur.fetchall()]
+
+        for r in rows:
+            if hasattr(r.get('created_at'), 'isoformat'):
+                r['created_at'] = r['created_at'].isoformat()
+            if isinstance(r.get('actions'), str):
+                try: r['actions'] = json.loads(r['actions'])
+                except: r['actions'] = []
+            if r.get('actions') is None:
+                r['actions'] = []
+            r['is_favorite'] = bool(r.get('is_favorite', False))
+
+        return jsonify({'hands': rows})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/export', methods=['GET'])
