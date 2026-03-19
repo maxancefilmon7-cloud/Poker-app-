@@ -427,10 +427,6 @@ def tournament_update_blinds():
         return jsonify({'error': 'Niveau invalide'}), 400
 
     state = load_state(username)
-    old_bb = state.get('bb_val', 1000.0)
-    if old_bb > 0:
-        stack_in_bb = state['stack_actuel'] / old_bb
-        state['stack_actuel'] = round(stack_in_bb * bb_val)
     state['bb_val'] = bb_val
     # Si ante envoyé explicitement, l'utiliser; sinon recalculer selon l'état actuel
     if ante:
