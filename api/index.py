@@ -15,7 +15,7 @@ from flask import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-key-change-me')
-DATABASE_URL = os.environ.get('POSTGRES_URL', '')
+DATABASE_URL = os.environ.get('POSTGRES_URL') or os.environ.get('DATABASE_URL', '')
 
 # ---------------------------------------------------------------------------
 # DB helpers — Postgres obligatoire (pas de fallback mémoire)
