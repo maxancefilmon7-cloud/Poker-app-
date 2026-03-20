@@ -62,7 +62,7 @@
 
 <!-- BARRE MOBILE (visible uniquement sur téléphone) -->
 <div class="md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-3">
-  <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white text-2xl leading-none">☰</button>
+  <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white text-3xl leading-none p-2 -ml-2 touch-manipulation">☰</button>
   <div class="text-yellow-400 font-black text-sm">♠ Poker Pro Tracker</div>
   <div id="mobile-stack" class="text-yellow-400 font-bold text-sm">—</div>
 </div>
@@ -664,6 +664,9 @@ function showView(name) {
     if (!isMobile) {
       sidebar.style.transform = 'translateX(0)';
       main.style.marginLeft = '16rem';
+    } else {
+      sidebar.style.transform = '';  // Laisse les classes CSS gérer (translateX via .sidebar / .sidebar.open)
+      main.style.marginLeft = '0';
     }
   }
   closeSidebar();
