@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poker Pro Tracker</title>
+  <title>Poker Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
@@ -63,14 +63,14 @@
 <!-- BARRE MOBILE (visible uniquement sur téléphone) -->
 <div class="md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-3">
   <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white text-3xl leading-none p-2 -ml-2 touch-manipulation">☰</button>
-  <div class="text-yellow-400 font-black text-sm">♠ Poker Pro Tracker</div>
+  <div class="text-yellow-400 font-black text-sm">♠ Poker Tracker</div>
   <div id="mobile-stack" class="text-yellow-400 font-bold text-sm">—</div>
 </div>
 
 <!-- SIDEBAR -->
 <aside id="sidebar" class="sidebar fixed top-0 left-0 h-full w-64 bg-gray-800 border-r border-gray-700 z-40 flex flex-col overflow-y-auto">
   <div class="p-4 border-b border-gray-700">
-    <div class="text-yellow-400 font-black text-lg">♠ Poker Pro Tracker</div>
+    <div class="text-yellow-400 font-black text-lg">♠ Poker Tracker</div>
     <div id="sb-username" class="text-gray-400 text-sm mt-1"></div>
   </div>
 
@@ -152,7 +152,7 @@
       <div class="bg-gray-800 rounded-2xl p-10 w-full max-w-sm shadow-2xl border border-gray-700">
         <div class="text-center mb-8">
           <div class="text-6xl mb-3">♠</div>
-          <h1 class="text-3xl font-black text-yellow-400">Poker Pro Tracker</h1>
+          <h1 class="text-3xl font-black text-yellow-400">Poker Tracker</h1>
           <p class="text-gray-400 text-sm mt-2">Votre assistant de tournoi</p>
         </div>
         <div class="flex flex-col gap-4">
@@ -862,9 +862,25 @@ function renderStartHand() {
     `<button onclick="setTableSize(${n})" class="px-3 py-1 rounded-lg text-xs font-bold ${n===size ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">${n} joueurs</button>`
   ).join('');
 
+  const curStack = S.stack_actuel != null ? Math.round(S.stack_actuel) : '';
+  const bbVal = S.bb_val || 0;
+  const blindsLabel = bbVal > 0 ? `${Math.round(bbVal/2).toLocaleString('fr-FR')}/${Math.round(bbVal).toLocaleString('fr-FR')}` : '—';
   return `
     <div class="max-w-xl mx-auto">
       <h2 class="text-xl font-black text-yellow-400 mb-5">🃏 Nouvelle Main</h2>
+      <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Blindes</div>
+            <div class="text-yellow-400 font-bold">${blindsLabel}</div>
+          </div>
+          <div class="text-xs text-gray-500">Modifiable dans le menu →</div>
+        </div>
+        <label class="text-sm text-gray-400 mb-2 font-semibold block">Stack actuel (jetons)</label>
+        <input id="sh-stack" type="number" value="${curStack}" placeholder="Stack en jetons"
+          class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-base mb-1" />
+        <div id="sh-stack-bb" class="text-xs text-gray-400 mb-4"></div>
+      </div>
       <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-4">
         <div class="text-sm text-gray-400 mb-2 font-semibold">Taille de la table</div>
         <div class="flex flex-wrap gap-2 mb-4">${sizeBtns}</div>
@@ -893,8 +909,11 @@ async function startHand() {
   const c1 = getCard('h1') || '';
   const c2 = getCard('h2') || '';
   const players = POSITIONS_BY_SIZE[getTableSize()] || POSITIONS_BY_SIZE[9];
+  const stackInput = document.getElementById('sh-stack');
+  const stack = stackInput && stackInput.value !== '' ? parseFloat(stackInput.value) : null;
+  if (stack == null || isNaN(stack) || stack <= 0) return showToast('Entrez votre stack', 'warn');
   try {
-    const state = await api('/api/hand/start', { my_pos: pos, c1, c2, players });
+    const state = await api('/api/hand/start', { my_pos: pos, c1, c2, players, stack });
     state.username = S.username;
     S = state;
     cardSels = {};
@@ -1305,64 +1324,170 @@ async function toggleFavorite(idx, handId, newVal) {
   } catch(e) {}
 }
 
+function fmtChips(n) {
+  if (n == null || isNaN(n)) return '—';
+  return Math.round(n).toLocaleString('fr-FR');
+}
+
+function bbStr(chips, bb) {
+  if (!bb || !chips) return '';
+  const v = chips / bb;
+  return `${(Math.round(v * 10) / 10)}BB`;
+}
+
+function decorateAction(line, bb) {
+  // Add (XBB) after Raise / Bet amounts
+  if (!bb) return line;
+  return line.replace(/(Raise|Bet)\s+(\d+(?:\.\d+)?)/gi, (m, verb, amt) => {
+    const v = parseFloat(amt) / bb;
+    return `${verb} ${fmtChips(parseFloat(amt))} (${Math.round(v * 10) / 10}BB)`;
+  });
+}
+
+function splitBoardCards(board) {
+  if (!board) return [];
+  return board.trim().split(/\s+/).filter(Boolean);
+}
+
+function renderBoardCards(cards) {
+  if (!cards.length) return '';
+  return cards.map(c => `<span class="inline-block mx-0.5 text-2xl">${formatCard(c)}</span>`).join('');
+}
+
 function showHandDetail(idx) {
   const h = (window._statsHands || [])[idx];
   if (!h) return;
+  window._currentHand = h;
+  window._currentHandIdx = idx;
 
   const prof = h.profit || 0;
-  const profCls = prof >= 0 ? 'text-green-400' : 'text-red-400';
-  const profStr = (prof >= 0 ? '+' : '') + Math.round(prof).toLocaleString('fr-FR');
+  const profCls = prof >= 0 ? 'text-emerald-400' : 'text-red-400';
+  const profStr = (prof >= 0 ? '+' : '') + fmtChips(prof);
   const actions = Array.isArray(h.actions) ? h.actions : [];
+  const bb = h.big_blind || null;
+  const sb = h.small_blind || (bb ? bb / 2 : null);
+  const stackStart = h.stack_start;
 
-  // Groupe les actions par street
+  // Groupe par street
   const streets = ['Préflop', 'Flop', 'Turn', 'River'];
-  const grouped = {};
-  streets.forEach(s => grouped[s] = []);
+  const grouped = { 'Préflop': [], 'Flop': [], 'Turn': [], 'River': [] };
   actions.forEach(a => {
-    const street = streets.find(s => a.startsWith(s) || a.includes(`(${s})`));
-    if (street) grouped[street].push(a.replace(`${street} : `, '').replace(` (${street})`, ''));
-    else grouped['Préflop'].push(a);
+    const street = streets.find(s => a.includes(`(${s})`));
+    if (street) {
+      const clean = a.replace(` (${street})`, '');
+      grouped[street].push(decorateAction(clean, bb));
+    } else {
+      grouped['Préflop'].push(decorateAction(a, bb));
+    }
   });
 
-  const streetHtml = streets.map(street => {
-    if (!grouped[street].length) return '';
+  const boardCards = splitBoardCards(h.board);
+  const flopCards = boardCards.slice(0, 3);
+  const turnCard = boardCards.slice(3, 4);
+  const riverCard = boardCards.slice(4, 5);
+
+  const streetBlock = (label, boardSlice, lines) => {
+    if (!boardSlice.length && !lines.length) return '';
     return `
-      <div class="mb-3">
-        <div class="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-1">${street}</div>
-        ${grouped[street].map(a => `<div class="text-sm text-gray-300 py-0.5 pl-2 border-l-2 border-gray-600">${a}</div>`).join('')}
+      <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 p-3 mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[11px] font-bold text-yellow-400 uppercase tracking-widest">${label}</div>
+          ${boardSlice.length ? `<div>${renderBoardCards(boardSlice)}</div>` : ''}
+        </div>
+        ${lines.length
+          ? lines.map(a => `<div class="text-sm text-slate-200 py-0.5 pl-2 border-l-2 border-yellow-400/40">${a}</div>`).join('')
+          : '<div class="text-xs text-slate-500 italic">Aucune action</div>'}
       </div>`;
-  }).join('');
+  };
+
+  const blindsLabel = bb ? `${fmtChips(sb)}/${fmtChips(bb)}` : '—';
+  const stackLabel = stackStart != null
+    ? `${fmtChips(stackStart)}${bb ? ` <span class="text-slate-400 text-xs">(${bbStr(stackStart, bb)})</span>` : ''}`
+    : '—';
 
   document.getElementById('hand-modal-content').innerHTML = `
-    ${h.is_favorite ? '<div class="inline-block bg-yellow-500/20 text-yellow-400 text-xs px-2 py-0.5 rounded mb-3">⭐ À analyser</div>' : ''}
-    <div class="flex justify-between items-start mb-4">
+    <div class="flex items-center justify-between mb-4">
       <div>
-        <div class="text-xs text-gray-400">${h.tournament || ''} · ${h.heure || ''}</div>
-        <div class="text-lg font-bold mt-1">
-          <span class="bg-gray-700 px-2 py-0.5 rounded text-sm font-mono mr-2">${h.position || ''}</span>
-          ${h.my_cards ? formatCardsStr(h.my_cards) : ''}
+        <div class="text-xs text-slate-400">${h.tournament || ''} · ${h.heure || ''}</div>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="bg-slate-700 px-2 py-0.5 rounded text-xs font-mono uppercase">${h.position || '—'}</span>
+          <span class="text-xl">${h.my_cards ? formatCardsStr(h.my_cards) : ''}</span>
         </div>
       </div>
       <div class="text-right">
         <div class="text-2xl font-black ${profCls}">${profStr}</div>
-        <div class="text-xs text-gray-400">jetons</div>
+        <div class="text-[10px] uppercase text-slate-500 tracking-wider">jetons</div>
       </div>
     </div>
 
-    ${h.board ? `<div class="text-center text-xl tracking-widest bg-gray-900 rounded-lg px-4 py-2 mb-4 font-mono">${h.board.trim()}</div>` : ''}
-
-    <div class="bg-gray-900 rounded-lg p-3 mb-4">
-      ${streetHtml || '<div class="text-gray-500 text-sm">Aucune action enregistrée (mains anciennes)</div>'}
+    <div class="grid grid-cols-2 gap-2 mb-4 text-xs">
+      <div class="bg-slate-900/60 rounded-lg border border-slate-700/60 px-3 py-2">
+        <div class="text-slate-500 uppercase tracking-wider text-[10px]">Blindes</div>
+        <div class="text-yellow-400 font-bold text-sm">${blindsLabel}</div>
+      </div>
+      <div class="bg-slate-900/60 rounded-lg border border-slate-700/60 px-3 py-2">
+        <div class="text-slate-500 uppercase tracking-wider text-[10px]">Stack début</div>
+        <div class="text-white font-bold text-sm">${stackLabel}</div>
+      </div>
     </div>
 
-    <div class="flex justify-between items-center text-sm border-t border-gray-700 pt-3">
-      <div class="text-gray-400">Gagnant : <span class="text-white font-bold">${h.winner || '—'}</span>
-        ${h.winner_cards && h.winner_cards !== 'Cachées' ? `<span class="ml-2 font-mono">${formatCardsStr(h.winner_cards)}</span>` : ''}
+    ${streetBlock('Préflop', [], grouped['Préflop'])}
+    ${streetBlock('Flop', flopCards, grouped['Flop'])}
+    ${streetBlock('Turn', turnCard, grouped['Turn'])}
+    ${streetBlock('River', riverCard, grouped['River'])}
+
+    <div class="flex justify-between items-center text-sm border-t border-slate-700 pt-3 mt-2">
+      <div class="text-slate-400">Gagnant : <span class="text-white font-bold">${h.winner || '—'}</span>
+        ${h.winner_cards && h.winner_cards !== 'Cachées' ? `<span class="ml-2">${formatCardsStr(h.winner_cards)}</span>` : ''}
       </div>
-      <div class="text-gray-400">Stack final : <span class="text-white font-bold">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</span></div>
+      <div class="text-slate-400">Stack final : <span class="text-white font-bold">${fmtChips(h.new_stack)}</span></div>
+    </div>
+
+    <div class="flex gap-2 mt-4 pt-3 border-t border-slate-700">
+      <button onclick="modalToggleFavorite()" id="modal-fav-btn"
+        class="flex-1 ${h.is_favorite ? 'bg-yellow-400 text-black' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'} font-bold rounded-lg py-2 text-sm transition">
+        ${h.is_favorite ? '⭐ Retirer favori' : '☆ Ajouter favori'}
+      </button>
+      <button onclick="modalDeleteHand()"
+        class="flex-1 bg-red-700 hover:bg-red-600 text-white font-bold rounded-lg py-2 text-sm transition">
+        🗑 Supprimer
+      </button>
     </div>
   `;
   document.getElementById('hand-modal').classList.remove('hidden');
+}
+
+async function modalToggleFavorite() {
+  const h = window._currentHand;
+  if (!h || !h.id) return;
+  const newVal = !h.is_favorite;
+  try {
+    await api('/api/hand/favorite', { id: h.id, favorite: newVal });
+    h.is_favorite = newVal;
+    // Sync les listes
+    if (window._statsHands && window._statsHands[window._currentHandIdx]) {
+      window._statsHands[window._currentHandIdx].is_favorite = newVal;
+    }
+    if (window._histHands && window._histHands[window._currentHandIdx]) {
+      window._histHands[window._currentHandIdx].is_favorite = newVal;
+    }
+    showHandDetail(window._currentHandIdx);
+    // Refresh underlying view
+    if (!document.getElementById('view-history').classList.contains('hidden')) loadHistory();
+  } catch (e) {}
+}
+
+async function modalDeleteHand() {
+  const h = window._currentHand;
+  if (!h || !h.id) return;
+  if (!confirm('Supprimer définitivement cette main ?')) return;
+  try {
+    await api('/api/hand/delete', { id: h.id });
+    document.getElementById('hand-modal').classList.add('hidden');
+    showToast('Main supprimée');
+    if (!document.getElementById('view-history').classList.contains('hidden')) loadHistory();
+    if (!document.getElementById('view-stats').classList.contains('hidden')) loadStats();
+  } catch (e) {}
 }
 
 function formatCardsStr(s) {
@@ -1423,7 +1548,7 @@ async function loadHistory() {
         <td class="px-4 py-3 text-gray-300">${h.winner || '—'}</td>
         <td class="px-4 py-3 text-right font-bold ${profCls}">${profStr}</td>
         <td class="px-4 py-3 text-right text-gray-300">${h.new_stack ? Math.round(h.new_stack).toLocaleString('fr-FR') : '—'}</td>
-        <td class="px-4 py-3 text-center" onclick="event.stopPropagation(); toggleHistFavorite(${idx}, ${h.id || 'null'}, ${!isFav})">
+        <td class="px-4 py-3 text-center" onclick="event.stopPropagation(); toggleHistFavorite(${idx}, ${h.id || 'null'})">
           <span class="text-xl cursor-pointer hover:scale-125 transition-transform inline-block">${isFav ? '⭐' : '☆'}</span>
         </td>
         <td class="px-4 py-3 text-center">${hasActions ? '<span class="text-yellow-400 text-xs">🔍 Voir</span>' : '<span class="text-gray-600 text-xs">—</span>'}</td>
@@ -1440,17 +1565,23 @@ function showHistDetail(idx) {
   showHandDetail(idx);
 }
 
-async function toggleHistFavorite(idx, handId, newVal) {
-  await toggleFavorite(idx, handId, newVal);
-  // Met aussi à jour _histHands
-  if (window._histHands && window._histHands[idx]) {
-    window._histHands[idx].is_favorite = newVal;
+async function toggleHistFavorite(idx, handId) {
+  if (!handId) return showToast('Main non sauvegardée', 'error');
+  const h = (window._histHands || [])[idx];
+  if (!h) return;
+  const newVal = !h.is_favorite;
+  try {
+    await api('/api/hand/favorite', { id: handId, favorite: newVal });
+    h.is_favorite = newVal;
+    if (window._statsHands && window._statsHands[idx]) {
+      window._statsHands[idx].is_favorite = newVal;
+    }
     const rows = document.querySelectorAll('#hist-table-body tr');
     if (rows[idx]) {
       const star = rows[idx].querySelector('td:nth-child(8) span');
       if (star) star.textContent = newVal ? '⭐' : '☆';
     }
-  }
+  } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------

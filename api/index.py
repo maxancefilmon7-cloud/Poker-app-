@@ -79,6 +79,9 @@ def init_db():
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS board TEXT DEFAULT ''",
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS actions JSONB DEFAULT '[]'",
                     "ALTER TABLE hands ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS small_blind REAL",
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS big_blind REAL",
+                    "ALTER TABLE hands ADD COLUMN IF NOT EXISTS stack_start REAL",
                 ]:
                     cur.execute(col_sql)
             conn.commit()
@@ -180,6 +183,8 @@ def _restore_snapshot(state, snap):
 
 
 def _save_hand_db(username, state, winner, winner_cards, profit):
+    bb_val = float(state.get('bb_val') or 0)
+    sb_val = round(bb_val / 2) if bb_val else None
     hand = {
         'username': username,
         'tournament': state['tournoi'],
@@ -192,6 +197,9 @@ def _save_hand_db(username, state, winner, winner_cards, profit):
         'actions': state['hand_data'].get('actions', []),
         'profit': profit,
         'new_stack': state['stack_actuel'],
+        'small_blind': sb_val,
+        'big_blind': bb_val if bb_val else None,
+        'stack_start': state.get('stack_start'),
         'created_at': datetime.now().isoformat(),
     }
     try:
@@ -200,14 +208,16 @@ def _save_hand_db(username, state, winner, winner_cards, profit):
                 cur.execute("""
                     INSERT INTO hands
                         (username, tournament, heure, position, my_cards,
-                         board, winner, winner_cards, actions, profit, new_stack)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                         board, winner, winner_cards, actions, profit, new_stack,
+                         small_blind, big_blind, stack_start)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     hand['username'], hand['tournament'], hand['heure'],
                     hand['position'], hand['my_cards'], hand['board'],
                     hand['winner'], hand['winner_cards'],
                     json.dumps(hand['actions']),
                     hand['profit'], hand['new_stack'],
+                    hand['small_blind'], hand['big_blind'], hand['stack_start'],
                 ))
             conn.commit()
     except Exception as e:
@@ -457,6 +467,15 @@ def hand_start():
     # Mettre à jour initial_players si le frontend envoie la liste
     if players and isinstance(players, list) and len(players) >= 2:
         state['initial_players'] = players
+
+    # Stack saisi à chaque nouvelle main (snapshot avant deductions)
+    try:
+        manual_stack = data.get('stack')
+        if manual_stack is not None and manual_stack != '':
+            state['stack_actuel'] = float(manual_stack)
+    except (TypeError, ValueError):
+        pass
+    state['stack_start'] = state['stack_actuel']
 
     # Deduct ante from stack if applicable
     ante = state.get('ante', 0.0)
@@ -815,6 +834,27 @@ def toggle_favorite():
     return jsonify({'ok': True, 'favorite': favorite})
 
 
+@app.route('/api/hand/delete', methods=['POST'])
+@require_auth
+def delete_hand():
+    username = session['username']
+    data = request.get_json(force=True)
+    hand_id = data.get('id')
+    if not hand_id:
+        return jsonify({'error': 'id requis'}), 400
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    'DELETE FROM hands WHERE id=%s AND username=%s',
+                    (hand_id, username)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify({'ok': True})
+
+
 @app.route('/api/stats', methods=['GET'])
 @require_auth
 def get_stats():
@@ -830,7 +870,7 @@ def get_stats():
                     cur.execute("""
                         SELECT id, username, tournament, heure, position, my_cards,
                                board, winner, winner_cards, actions, profit, new_stack,
-                               created_at, is_favorite
+                               created_at, is_favorite, small_blind, big_blind, stack_start
                         FROM hands
                         WHERE username=%s AND tournament=%s AND is_favorite = TRUE
                         ORDER BY created_at ASC
@@ -839,7 +879,7 @@ def get_stats():
                     cur.execute("""
                         SELECT id, username, tournament, heure, position, my_cards,
                                board, winner, winner_cards, actions, profit, new_stack,
-                               created_at, is_favorite
+                               created_at, is_favorite, small_blind, big_blind, stack_start
                         FROM hands
                         WHERE username=%s AND tournament=%s
                         ORDER BY created_at ASC
@@ -848,7 +888,7 @@ def get_stats():
                     cur.execute("""
                         SELECT id, username, tournament, heure, position, my_cards,
                                board, winner, winner_cards, actions, profit, new_stack,
-                               created_at, is_favorite
+                               created_at, is_favorite, small_blind, big_blind, stack_start
                         FROM hands
                         WHERE username=%s AND is_favorite = TRUE
                         ORDER BY created_at ASC
@@ -857,7 +897,7 @@ def get_stats():
                     cur.execute("""
                         SELECT id, username, tournament, heure, position, my_cards,
                                board, winner, winner_cards, actions, profit, new_stack,
-                               created_at, is_favorite
+                               created_at, is_favorite, small_blind, big_blind, stack_start
                         FROM hands
                         WHERE username=%s
                         ORDER BY created_at ASC
@@ -918,7 +958,8 @@ def get_history():
                 base = """
                     SELECT id, tournament, heure, position, my_cards,
                            board, winner, winner_cards, actions, profit,
-                           new_stack, is_favorite, created_at
+                           new_stack, is_favorite, created_at,
+                           small_blind, big_blind, stack_start
                     FROM hands WHERE username=%s
                 """
                 params = [username]
