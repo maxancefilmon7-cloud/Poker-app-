@@ -192,14 +192,23 @@ def _filter_to_act(state, to_act):
 
 
 def _is_showdown_locked(state):
-    """True si au plus 1 joueur actif a encore des jetons (les autres sont all-in).
-    Dans ce cas il n'y a plus aucune décision a prendre."""
+    """True si plus aucune decision n'est possible.
+    - 0 joueur peut encore agir, OU
+    - 1 seul joueur peut agir mais il a deja call la mise courante
+      (donc rien a decider face a des adversaires all-in)."""
     active = state.get('active_players', [])
     if len(active) < 2:
         return False
     allin = set(state.get('allin_players', []))
     can_act = [p for p in active if p not in allin]
-    return len(can_act) <= 1
+    if len(can_act) == 0:
+        return True
+    if len(can_act) == 1:
+        invested = state.get('player_invested_street', {}) or {}
+        current_bet = state.get('current_bet', 0) or 0
+        p = can_act[0]
+        return invested.get(p, 0) >= current_bet
+    return False
 
 
 def _save_hand_db(username, state, winner, winner_cards, profit):
