@@ -11,32 +11,29 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-0: #070b15;
-      --bg-1: #0c1424;
-      --surface-1: #111c30;
-      --surface-2: #18243c;
-      --surface-3: #1f2f4c;
-      --border-1: #1e2d46;
-      --border-2: #2a3c5b;
-      --text-0: #f1f5f9;
-      --text-1: #cbd5e1;
-      --text-2: #94a3b8;
-      --text-3: #64748b;
-      /* Accent emerald — pas de jaune */
-      --accent: #10b981;
-      --accent-bright: #34d399;
-      --accent-hover: #059669;
-      --accent-soft: rgba(16, 185, 129, 0.14);
-      --accent-glow: rgba(16, 185, 129, 0.35);
-      --danger: #ef4444;
-      --danger-soft: rgba(239, 68, 68, 0.15);
+      --bg-0: #0a0c11;
+      --bg-1: #0e1117;
+      --surface-1: #14171f;
+      --surface-2: #1a1e27;
+      --surface-3: #232832;
+      --border-1: #1f242e;
+      --border-2: #2a303b;
+      --text-0: #e8eaed;
+      --text-1: #b8bcc4;
+      --text-2: #8a8f99;
+      --text-3: #5c6270;
+      /* Accent ultra-sobre — gris clair quasi blanc */
+      --accent: #e8eaed;
+      --accent-bright: #ffffff;
+      --accent-hover: #ffffff;
+      --accent-soft: rgba(232, 234, 237, 0.08);
+      --accent-glow: rgba(0, 0, 0, 0.25);
+      --danger: #c44545;
+      --danger-soft: rgba(196, 69, 69, 0.12);
     }
     * { -webkit-tap-highlight-color: transparent; }
     body {
-      background:
-        radial-gradient(1100px 600px at 15% -10%, rgba(16,185,129,0.10), transparent 60%),
-        radial-gradient(900px 500px at 95% 110%, rgba(20,184,166,0.08), transparent 60%),
-        linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
+      background: linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
       background-attachment: fixed;
       color: var(--text-0);
       font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -65,13 +62,26 @@
     .text-slate-400 { color: var(--text-2) !important; }
     .text-slate-500 { color: var(--text-3) !important; }
 
-    /* Accent emerald — supplante toutes les classes yellow Tailwind */
-    .text-yellow-400, .text-yellow-300 { color: var(--accent-bright) !important; }
-    .bg-yellow-400 { background-color: var(--accent) !important; color: #ffffff !important; }
+    /* Accent sobre — supplante toutes les classes yellow Tailwind */
+    .text-yellow-400, .text-yellow-300 { color: var(--text-0) !important; }
+    .bg-yellow-400 { background-color: var(--accent) !important; color: #0a0c11 !important; }
     .hover\:bg-yellow-300:hover, .bg-yellow-400:hover { background-color: var(--accent-hover) !important; }
-    .border-yellow-400 { border-color: var(--accent) !important; }
-    .accent-yellow-400 { accent-color: var(--accent) !important; }
-    .text-yellow-500\/20, .bg-yellow-500\/20 { background-color: var(--accent-soft) !important; color: var(--accent-bright) !important; }
+    .border-yellow-400 { border-color: var(--text-2) !important; }
+    .accent-yellow-400 { accent-color: var(--text-1) !important; }
+    .text-yellow-500\/20, .bg-yellow-500\/20 { background-color: var(--accent-soft) !important; color: var(--text-0) !important; }
+    /* Adoucit les couleurs vives Tailwind */
+    .bg-green-500, .bg-green-600 { background-color: #2d5f4a !important; }
+    .hover\:bg-green-400:hover, .hover\:bg-green-500:hover { background-color: #357056 !important; }
+    .text-green-400, .text-emerald-400 { color: #6fae8d !important; }
+    .bg-red-700 { background-color: #6b2424 !important; }
+    .bg-red-600 { background-color: #7a2929 !important; }
+    .hover\:bg-red-600:hover, .hover\:bg-red-500:hover { background-color: #8a3030 !important; }
+    .text-red-400 { color: #c97070 !important; }
+    .bg-blue-600, .bg-blue-500 { background-color: #2a3f5c !important; }
+    .hover\:bg-blue-500:hover, .hover\:bg-blue-400:hover { background-color: #324b6e !important; }
+    .bg-purple-600 { background-color: #3d2f55 !important; }
+    .hover\:bg-purple-500:hover { background-color: #4a3866 !important; }
+    .text-purple-300 { color: #9b88b8 !important; }
 
     /* Cards / surfaces : ombres douces + bordures subtiles */
     .bg-gray-800.rounded-xl, .bg-gray-800.rounded-2xl,
@@ -101,16 +111,14 @@
       transition: all 0.18s cubic-bezier(0.3, 0, 0.2, 1);
       font-family: inherit;
     }
-    button.bg-yellow-400 {
-      box-shadow: 0 6px 20px -8px var(--accent-glow);
+    button.bg-yellow-400,
+    button.bg-green-500, button.bg-green-600,
+    button.bg-red-700, button.bg-red-600,
+    button.bg-blue-600, button.bg-blue-500,
+    button.bg-purple-600 {
+      box-shadow: none;
     }
-    button.bg-yellow-400:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 10px 24px -8px var(--accent-glow);
-    }
-    button.bg-green-500, button.bg-green-600 {
-      box-shadow: 0 6px 20px -8px rgba(16, 185, 129, 0.5);
-    }
+    button.bg-yellow-400:hover,
     button.bg-green-500:hover, button.bg-green-600:hover,
     button.bg-red-700:hover, button.bg-red-600:hover,
     button.bg-blue-600:hover, button.bg-blue-500:hover,
@@ -129,8 +137,8 @@
 
     .card-btn { transition: all 0.15s; }
     .card-btn.selected-v, .card-btn.selected-s {
-      background: var(--accent);
-      color: #ffffff;
+      background: var(--text-0);
+      color: #0a0c11;
       font-weight: 800;
     }
 
@@ -139,17 +147,15 @@
     @keyframes fadeOut { from { opacity:1; } to { opacity:0; pointer-events:none; } }
 
     .tab-btn.active {
-      background: var(--accent) !important;
-      color: #ffffff !important;
+      background: var(--text-0) !important;
+      color: #0a0c11 !important;
       font-weight: 700;
-      box-shadow: 0 6px 18px -6px var(--accent-glow);
     }
     .pos-btn.selected {
-      background: var(--accent) !important;
-      color: #ffffff !important;
+      background: var(--text-0) !important;
+      color: #0a0c11 !important;
       font-weight: 800;
-      border-color: var(--accent) !important;
-      box-shadow: 0 6px 18px -6px var(--accent-glow);
+      border-color: var(--text-0) !important;
     }
 
     input[type=number]::-webkit-inner-spin-button { opacity:1; }
@@ -173,16 +179,13 @@
     /* Login hero */
     .login-card {
       box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7),
-                  0 0 0 1px rgba(16,185,129,0.12) inset;
+                  0 0 0 1px rgba(255,255,255,0.04) inset;
     }
 
     /* Mode clair — refonte propre */
     body.light {
-      background:
-        radial-gradient(1200px 600px at 15% -10%, rgba(16,185,129,0.10), transparent 60%),
-        radial-gradient(900px 500px at 95% 110%, rgba(20,184,166,0.08), transparent 60%),
-        linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
-      color: #0f172a;
+      background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%);
+      color: #18181b;
     }
     body.light .bg-gray-800 { background-color: #ffffff !important; }
     body.light .bg-gray-700 { background-color: #f1f5f9 !important; }
@@ -312,7 +315,7 @@
     <div class="min-h-screen flex items-center justify-center">
       <div class="bg-gray-800 login-card rounded-2xl p-10 w-full max-w-sm border border-gray-700">
         <div class="text-center mb-8">
-          <div class="text-6xl mb-3" style="filter: drop-shadow(0 4px 20px rgba(16,185,129,0.45));">♠</div>
+          <div class="text-6xl mb-3 text-white opacity-90">♠</div>
           <h1 class="text-3xl font-black tracking-tight text-yellow-400">Poker Tracker</h1>
           <p class="text-gray-400 text-sm mt-2 tracking-wide">Votre assistant de tournoi</p>
         </div>
