@@ -333,7 +333,15 @@
 
   <!-- SETUP VIEW -->
   <div id="view-setup" class="hidden p-6">
-    <h2 class="text-2xl font-black text-yellow-400 mb-6">🏆 Gestion des Tournois</h2>
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <h2 class="text-2xl font-black text-yellow-400">🏆 Gestion des Tournois</h2>
+      <div class="flex items-center gap-3 text-sm">
+        <span id="setup-username" class="text-gray-400"></span>
+        <button onclick="doLogout()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg px-3 py-1.5 text-sm font-medium">
+          Déconnexion
+        </button>
+      </div>
+    </div>
     <!-- Tabs -->
     <div class="flex gap-2 mb-6">
       <button class="tab-btn active px-4 py-2 rounded-lg bg-gray-700 text-sm" onclick="switchTab('create')">Créer</button>
@@ -836,6 +844,10 @@ function showView(name) {
   }
   closeSidebar();
 
+  if (name === 'setup') {
+    const u = document.getElementById('setup-username');
+    if (u) u.textContent = S.username ? `Connecté : ${S.username}` : '';
+  }
   if (name === 'game') renderGame();
   if (name === 'stats') loadStats();
   if (name === 'history') loadHistory();
