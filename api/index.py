@@ -137,6 +137,7 @@ def default_state():
         'my_pos': None,
         'is_raising': False,
         'to_act_list': None,
+        'allin_players': [],
     }
 
 
@@ -167,6 +168,7 @@ def _snapshot(state):
         'step': state['step'],
         'stack_actuel': state['stack_actuel'],
         'is_raising': state.get('is_raising', False),
+        'allin_players': copy.deepcopy(state.get('allin_players', [])),
     }
 
 
@@ -180,6 +182,24 @@ def _restore_snapshot(state, snap):
     state['step'] = snap['step']
     state['stack_actuel'] = snap['stack_actuel']
     state['is_raising'] = snap.get('is_raising', False)
+    state['allin_players'] = snap.get('allin_players', [])
+
+
+def _filter_to_act(state, to_act):
+    """Exclut les all-in du to_act_list."""
+    allin = set(state.get('allin_players', []))
+    return [p for p in to_act if p not in allin]
+
+
+def _is_showdown_locked(state):
+    """True si au plus 1 joueur actif a encore des jetons (les autres sont all-in).
+    Dans ce cas il n'y a plus aucune décision a prendre."""
+    active = state.get('active_players', [])
+    if len(active) < 2:
+        return False
+    allin = set(state.get('allin_players', []))
+    can_act = [p for p in active if p not in allin]
+    return len(can_act) <= 1
 
 
 def _save_hand_db(username, state, winner, winner_cards, profit):
@@ -236,6 +256,7 @@ def _reset_to_start_hand(state):
     state['my_pos'] = None
     state['is_raising'] = False
     state['to_act_list'] = None
+    state['allin_players'] = []
 
 
 def require_auth(f):
@@ -502,6 +523,7 @@ def hand_start():
     state['player_invested_street'] = {}
     state['is_raising'] = False
     state['history'] = []
+    state['allin_players'] = []
 
     pot = 0.0
     # Antes
@@ -575,6 +597,9 @@ def action_fold():
             state['active_players'].remove(current_actor)
         if to_act:
             to_act.pop(0)
+        to_act = _filter_to_act(state, to_act)
+        if _is_showdown_locked(state):
+            to_act = []
         state['to_act_list'] = to_act
 
         # Record action
@@ -616,6 +641,9 @@ def action_call():
 
     if to_act:
         to_act.pop(0)
+    to_act = _filter_to_act(state, to_act)
+    if _is_showdown_locked(state):
+        to_act = []
     state['to_act_list'] = to_act
 
     persist_state(username, state)
@@ -663,6 +691,14 @@ def action_raise():
     state['hand_data']['actions'].append(f'{current_actor}: {label} {amount} ({street})')
     state['is_raising'] = False
 
+    if is_allin:
+        allin = list(state.get('allin_players', []))
+        if current_actor not in allin:
+            allin.append(current_actor)
+        state['allin_players'] = allin
+        if current_actor == my_pos:
+            state['stack_actuel'] = 0.0
+
     # Rebuild to_act_list: everyone except raiser who is still active
     active = state['active_players']
     order = get_action_order(street, active)
@@ -676,6 +712,9 @@ def action_raise():
             to_act.pop(0)
         to_act_new = to_act
 
+    to_act_new = _filter_to_act(state, to_act_new)
+    if _is_showdown_locked(state):
+        to_act_new = []
     state['to_act_list'] = to_act_new
 
     persist_state(username, state)
@@ -704,7 +743,11 @@ def action_next_street():
 
     if next_step in action_steps:
         active = state['active_players']
-        state['to_act_list'] = get_action_order('Flop', active)
+        new_order = get_action_order('Flop', active)
+        new_order = _filter_to_act(state, new_order)
+        if _is_showdown_locked(state):
+            new_order = []
+        state['to_act_list'] = new_order
 
     persist_state(username, state)
     return jsonify(state)
@@ -737,7 +780,11 @@ def action_set_cards():
 
     if next_step in ('FLOP', 'TURN', 'RIVER'):
         active = state['active_players']
-        state['to_act_list'] = get_action_order('Flop', active)
+        new_order = get_action_order('Flop', active)
+        new_order = _filter_to_act(state, new_order)
+        if _is_showdown_locked(state):
+            new_order = []
+        state['to_act_list'] = new_order
 
     persist_state(username, state)
     return jsonify(state)

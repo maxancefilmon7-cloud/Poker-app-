@@ -978,9 +978,16 @@ function renderAction(street, nextStep) {
   } else if (toAct.length === 0) {
     // Street done
     const nextLabel = { 'FLOP_CARDS': 'Dévoiler le Flop', 'TURN_CARD': 'Dévoiler le Turn', 'RIVER_CARD': 'Dévoiler le River', 'RESULTAT': 'Aller au Résultat' };
-    content += `<div class="text-center text-green-400 font-bold mb-4 py-3 bg-green-900/30 rounded-xl border border-green-800">
-      ✓ Tour ${street} terminé
-    </div>
+    const allin = S.allin_players || [];
+    const showdown = allin.length > 0 && active.filter(p => !allin.includes(p)).length <= 1;
+    const banner = showdown
+      ? `<div class="text-center text-purple-300 font-bold mb-4 py-3 bg-purple-900/30 rounded-xl border border-purple-700">
+           🔒 All-in showdown — ${allin.length} joueur${allin.length>1?'s':''} all-in, plus de décisions
+         </div>`
+      : `<div class="text-center text-green-400 font-bold mb-4 py-3 bg-green-900/30 rounded-xl border border-green-800">
+           ✓ Tour ${street} terminé
+         </div>`;
+    content += banner + `
     <button onclick="nextStreet('${nextStep}')" class="w-full bg-blue-500 text-white font-black rounded-xl py-3 text-lg hover:bg-blue-400">
       ${nextLabel[nextStep] || 'Suite →'}
     </button>`;
