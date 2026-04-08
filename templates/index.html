@@ -11,36 +11,40 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-0: #0a0f1c;
-      --bg-1: #0f172a;
-      --surface-1: #131c2e;
-      --surface-2: #1a2540;
-      --surface-3: #243352;
-      --border-1: #233149;
-      --border-2: #2c3e60;
+      --bg-0: #070b15;
+      --bg-1: #0c1424;
+      --surface-1: #111c30;
+      --surface-2: #18243c;
+      --surface-3: #1f2f4c;
+      --border-1: #1e2d46;
+      --border-2: #2a3c5b;
       --text-0: #f1f5f9;
       --text-1: #cbd5e1;
       --text-2: #94a3b8;
       --text-3: #64748b;
-      --gold: #f5c842;
-      --gold-hover: #ffd75a;
-      --gold-soft: rgba(245, 200, 66, 0.12);
-      --felt: #15803d;
-      --felt-soft: rgba(21, 128, 61, 0.18);
+      /* Accent emerald — pas de jaune */
+      --accent: #10b981;
+      --accent-bright: #34d399;
+      --accent-hover: #059669;
+      --accent-soft: rgba(16, 185, 129, 0.14);
+      --accent-glow: rgba(16, 185, 129, 0.35);
       --danger: #ef4444;
       --danger-soft: rgba(239, 68, 68, 0.15);
     }
     * { -webkit-tap-highlight-color: transparent; }
     body {
       background:
-        radial-gradient(1200px 600px at 20% -10%, rgba(245,200,66,0.06), transparent 60%),
-        radial-gradient(900px 500px at 90% 110%, rgba(21,128,61,0.08), transparent 60%),
+        radial-gradient(1100px 600px at 15% -10%, rgba(16,185,129,0.10), transparent 60%),
+        radial-gradient(900px 500px at 95% 110%, rgba(20,184,166,0.08), transparent 60%),
         linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 100%);
       background-attachment: fixed;
       color: var(--text-0);
       font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
       font-feature-settings: 'cv11', 'ss01';
       letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
 
     /* Surface overrides — gardent les classes Tailwind existantes */
@@ -61,12 +65,13 @@
     .text-slate-400 { color: var(--text-2) !important; }
     .text-slate-500 { color: var(--text-3) !important; }
 
-    /* Gold accent rafiné */
-    .text-yellow-400, .text-yellow-300 { color: var(--gold) !important; }
-    .bg-yellow-400 { background-color: var(--gold) !important; }
-    .hover\:bg-yellow-300:hover, .bg-yellow-400:hover { background-color: var(--gold-hover) !important; }
-    .border-yellow-400 { border-color: var(--gold) !important; }
-    .accent-yellow-400 { accent-color: var(--gold) !important; }
+    /* Accent emerald — supplante toutes les classes yellow Tailwind */
+    .text-yellow-400, .text-yellow-300 { color: var(--accent-bright) !important; }
+    .bg-yellow-400 { background-color: var(--accent) !important; color: #ffffff !important; }
+    .hover\:bg-yellow-300:hover, .bg-yellow-400:hover { background-color: var(--accent-hover) !important; }
+    .border-yellow-400 { border-color: var(--accent) !important; }
+    .accent-yellow-400 { accent-color: var(--accent) !important; }
+    .text-yellow-500\/20, .bg-yellow-500\/20 { background-color: var(--accent-soft) !important; color: var(--accent-bright) !important; }
 
     /* Cards / surfaces : ombres douces + bordures subtiles */
     .bg-gray-800.rounded-xl, .bg-gray-800.rounded-2xl,
@@ -78,35 +83,45 @@
 
     /* Inputs polish */
     input, select, textarea {
+      font-family: inherit;
       transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s;
     }
     input:focus, select:focus, textarea:focus {
       outline: none !important;
-      border-color: var(--gold) !important;
-      box-shadow: 0 0 0 3px var(--gold-soft) !important;
+      border-color: var(--accent) !important;
+      box-shadow: 0 0 0 3px var(--accent-soft) !important;
+    }
+    /* Mobile : police 16px sur les inputs pour éviter le zoom auto iOS */
+    @media (max-width: 767px) {
+      input, select, textarea { font-size: 16px !important; }
     }
 
     /* Boutons : transitions douces + ombres */
     button {
       transition: all 0.18s cubic-bezier(0.3, 0, 0.2, 1);
+      font-family: inherit;
     }
     button.bg-yellow-400 {
-      box-shadow: 0 4px 16px -6px rgba(245, 200, 66, 0.5);
+      box-shadow: 0 6px 20px -8px var(--accent-glow);
     }
     button.bg-yellow-400:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 20px -6px rgba(245, 200, 66, 0.65);
+      box-shadow: 0 10px 24px -8px var(--accent-glow);
     }
     button.bg-green-500, button.bg-green-600 {
-      box-shadow: 0 4px 16px -6px rgba(21, 128, 61, 0.45);
+      box-shadow: 0 6px 20px -8px rgba(16, 185, 129, 0.5);
     }
-    button.bg-green-500:hover, button.bg-green-600:hover {
-      transform: translateY(-1px);
-    }
+    button.bg-green-500:hover, button.bg-green-600:hover,
     button.bg-red-700:hover, button.bg-red-600:hover,
     button.bg-blue-600:hover, button.bg-blue-500:hover,
     button.bg-purple-600:hover {
       transform: translateY(-1px);
+    }
+    button:active { transform: translateY(0) scale(0.98); }
+    /* Touch targets confortables */
+    button { min-height: 36px; }
+    @media (max-width: 767px) {
+      button { min-height: 44px; }
     }
 
     .sidebar { transition: transform 0.3s ease; }
@@ -114,8 +129,8 @@
 
     .card-btn { transition: all 0.15s; }
     .card-btn.selected-v, .card-btn.selected-s {
-      background: var(--gold);
-      color: #111;
+      background: var(--accent);
+      color: #ffffff;
       font-weight: 800;
     }
 
@@ -124,17 +139,17 @@
     @keyframes fadeOut { from { opacity:1; } to { opacity:0; pointer-events:none; } }
 
     .tab-btn.active {
-      background: var(--gold) !important;
-      color: #111 !important;
+      background: var(--accent) !important;
+      color: #ffffff !important;
       font-weight: 700;
-      box-shadow: 0 4px 14px -4px rgba(245, 200, 66, 0.5);
+      box-shadow: 0 6px 18px -6px var(--accent-glow);
     }
     .pos-btn.selected {
-      background: var(--gold) !important;
-      color: #111 !important;
+      background: var(--accent) !important;
+      color: #ffffff !important;
       font-weight: 800;
-      border-color: var(--gold) !important;
-      box-shadow: 0 4px 14px -4px rgba(245, 200, 66, 0.5);
+      border-color: var(--accent) !important;
+      box-shadow: 0 6px 18px -6px var(--accent-glow);
     }
 
     input[type=number]::-webkit-inner-spin-button { opacity:1; }
@@ -157,15 +172,15 @@
 
     /* Login hero */
     .login-card {
-      box-shadow: 0 20px 60px -20px rgba(0,0,0,0.6),
-                  0 0 0 1px rgba(245,200,66,0.08) inset;
+      box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7),
+                  0 0 0 1px rgba(16,185,129,0.12) inset;
     }
 
     /* Mode clair — refonte propre */
     body.light {
       background:
-        radial-gradient(1200px 600px at 20% -10%, rgba(245,200,66,0.10), transparent 60%),
-        radial-gradient(900px 500px at 90% 110%, rgba(21,128,61,0.08), transparent 60%),
+        radial-gradient(1200px 600px at 15% -10%, rgba(16,185,129,0.10), transparent 60%),
+        radial-gradient(900px 500px at 95% 110%, rgba(20,184,166,0.08), transparent 60%),
         linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
       color: #0f172a;
     }
@@ -207,7 +222,7 @@
 <div id="sidebar-overlay" class="hidden fixed inset-0 bg-black bg-opacity-60 z-30 md:hidden" onclick="closeSidebar()"></div>
 
 <!-- BARRE MOBILE (visible uniquement sur téléphone) -->
-<div class="md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-3">
+<div class="md:hidden fixed top-0 left-0 right-0 z-30 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 py-3" style="padding-top: calc(0.75rem + env(safe-area-inset-top));">
   <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white text-3xl leading-none p-2 -ml-2 touch-manipulation">☰</button>
   <div class="text-yellow-400 font-black text-sm">♠ Poker Tracker</div>
   <div id="mobile-stack" class="text-yellow-400 font-bold text-sm">—</div>
@@ -297,7 +312,7 @@
     <div class="min-h-screen flex items-center justify-center">
       <div class="bg-gray-800 login-card rounded-2xl p-10 w-full max-w-sm border border-gray-700">
         <div class="text-center mb-8">
-          <div class="text-6xl mb-3" style="filter: drop-shadow(0 4px 16px rgba(245,200,66,0.4));">♠</div>
+          <div class="text-6xl mb-3" style="filter: drop-shadow(0 4px 20px rgba(16,185,129,0.45));">♠</div>
           <h1 class="text-3xl font-black tracking-tight text-yellow-400">Poker Tracker</h1>
           <p class="text-gray-400 text-sm mt-2 tracking-wide">Votre assistant de tournoi</p>
         </div>
