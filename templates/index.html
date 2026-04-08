@@ -1200,6 +1200,31 @@ function renderAction(street, nextStep) {
     }
   }
 
+  // Equity calculator
+  if (myCards && myCards.length >= 4) {
+    const otherPlayers = (S.active_players || []).filter(p => p !== S.my_pos);
+    const villainOptions = otherPlayers.map(p => `<option value="${p}">${p}</option>`).join('');
+    content += `
+    <div class="mt-4 border border-gray-700 rounded-xl overflow-hidden">
+      <button onclick="toggleEquity()" class="w-full flex items-center justify-between px-4 py-3 bg-gray-800 hover:bg-gray-700 text-sm font-semibold text-gray-300 transition">
+        <span>⚡ Calculer équité vs range</span>
+        <span id="equity-chevron">▼</span>
+      </button>
+      <div id="equity-panel" class="hidden px-4 pb-4 pt-3 bg-gray-800 border-t border-gray-700">
+        <div class="flex gap-2 items-center mb-3">
+          <label class="text-xs text-gray-400 shrink-0">Villain :</label>
+          <select id="equity-villain-pos" class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-1.5 text-sm">
+            ${villainOptions || '<option value="BTN">BTN</option>'}
+          </select>
+          <button onclick="calcEquity()" class="bg-yellow-400 text-black font-black rounded-lg px-4 py-1.5 text-sm hover:bg-white transition shrink-0">
+            GO
+          </button>
+        </div>
+        <div id="equity-result"></div>
+      </div>
+    </div>`;
+  }
+
   // Undo
   if (history.length > 0) {
     content += `<button onclick="doUndo()" class="mt-3 w-full text-gray-400 hover:text-yellow-400 text-sm py-2 border border-gray-700 rounded-xl hover:border-yellow-400 transition">
@@ -1214,6 +1239,47 @@ function renderAction(street, nextStep) {
     </div>
     ${content}
   </div>`;
+}
+
+function toggleEquity() {
+  const panel = document.getElementById('equity-panel');
+  const chevron = document.getElementById('equity-chevron');
+  if (!panel) return;
+  const hidden = panel.classList.toggle('hidden');
+  if (chevron) chevron.textContent = hidden ? '▼' : '▲';
+}
+
+async function calcEquity() {
+  const myCards = S.hand_data?.my_cards || '';
+  const sel = document.getElementById('equity-villain-pos');
+  const villainPos = sel ? sel.value : 'BTN';
+  const resultEl = document.getElementById('equity-result');
+  if (!resultEl) return;
+
+  resultEl.innerHTML = '<div class="text-xs text-gray-400 text-center py-2">Calcul en cours...</div>';
+
+  try {
+    const data = await api('/api/equity', { my_cards: myCards, villain_pos: villainPos });
+    const winColor = data.win >= 50 ? 'text-green-400' : 'text-red-400';
+    resultEl.innerHTML = `
+      <div class="text-xs text-gray-500 mb-2">vs range <span class="text-gray-300 font-bold">${data.villain_pos}</span> (${data.range_hands} mains, ${data.simulations} sims)</div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div class="bg-gray-900 rounded-lg py-2 px-1">
+          <div class="text-xs text-gray-500 mb-0.5">Victoire</div>
+          <div class="text-xl font-black ${winColor}">${data.win}%</div>
+        </div>
+        <div class="bg-gray-900 rounded-lg py-2 px-1">
+          <div class="text-xs text-gray-500 mb-0.5">Égalité</div>
+          <div class="text-xl font-black text-gray-300">${data.tie}%</div>
+        </div>
+        <div class="bg-gray-900 rounded-lg py-2 px-1">
+          <div class="text-xs text-gray-500 mb-0.5">Défaite</div>
+          <div class="text-xl font-black text-red-400">${data.lose}%</div>
+        </div>
+      </div>`;
+  } catch (e) {
+    resultEl.innerHTML = '<div class="text-xs text-red-400 text-center py-2">Erreur lors du calcul</div>';
+  }
 }
 
 function renderRaisePanel(street) {

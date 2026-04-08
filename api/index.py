@@ -1,6 +1,7 @@
 import os
 import json
 import copy
+import random
 import psycopg2
 import psycopg2.extras
 import pandas as pd
@@ -11,6 +12,189 @@ from flask import (
     Flask, render_template, request, session,
     jsonify, send_file
 )
+
+# ---------------------------------------------------------------------------
+# Equity calculator — ranges par position + Monte Carlo
+# ---------------------------------------------------------------------------
+#
+# MODIFIER LES RANGES ICI :
+#   - VILLAIN_RANGES : ce que le vilain peut avoir selon sa position (open raise)
+#   - HERO_RANGES    : ta range d'open selon ta position (pour analyse hors jeu)
+#
+# Format des mains :
+#   'AA'  = paire (toutes couleurs)
+#   'AKs' = suited (même couleur)
+#   'AKo' = offsuit (couleurs différentes)
+# ---------------------------------------------------------------------------
+
+# ── RANGES VILAIN (open raise par position, 9-max) ──────────────────────────
+VILLAIN_RANGES = {
+    'UTG':    ['AA','KK','QQ','JJ','TT','AKs','AQs','AJs','ATs','KQs',
+               'AKo','AQo'],
+    'UTG+1':  ['AA','KK','QQ','JJ','TT','99','AKs','AQs','AJs','ATs','A9s',
+               'KQs','KJs','AKo','AQo','AJo'],
+    'UTG+2':  ['AA','KK','QQ','JJ','TT','99','88','AKs','AQs','AJs','ATs',
+               'A9s','A8s','KQs','KJs','QJs','AKo','AQo','AJo','ATo'],
+    'MP':     ['AA','KK','QQ','JJ','TT','99','88','AKs','AQs','AJs','ATs',
+               'A9s','A8s','KQs','KJs','KTs','QJs','AKo','AQo','AJo','ATo'],
+    'MP+1':   ['AA','KK','QQ','JJ','TT','99','88','77','AKs','AQs','AJs',
+               'ATs','A9s','A8s','A7s','KQs','KJs','KTs','QJs','QTs','JTs',
+               'AKo','AQo','AJo','ATo','KQo'],
+    'HJ':     ['AA','KK','QQ','JJ','TT','99','88','77','AKs','AQs','AJs',
+               'ATs','A9s','A8s','A7s','A6s','KQs','KJs','KTs','K9s','QJs',
+               'QTs','JTs','T9s','AKo','AQo','AJo','ATo','KQo','KJo'],
+    'CO':     ['AA','KK','QQ','JJ','TT','99','88','77','66','AKs','AQs',
+               'AJs','ATs','A9s','A8s','A7s','A6s','A5s','KQs','KJs','KTs',
+               'K9s','QJs','QTs','Q9s','JTs','J9s','T9s','98s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+    'BTN':    ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44',
+               'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s',
+               'A3s','A2s','KQs','KJs','KTs','K9s','K8s','QJs','QTs','Q9s',
+               'JTs','J9s','T9s','T8s','98s','97s','87s','76s','65s',
+               'AKo','AQo','AJo','ATo','A9o','A8o','KQo','KJo','KTo','QJo','QTo','JTo'],
+    'SB':     ['AA','KK','QQ','JJ','TT','99','88','77','66','55','AKs',
+               'AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','KQs','KJs',
+               'KTs','K9s','QJs','QTs','JTs','T9s','98s','87s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+    'BB':     ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33',
+               '22','AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+               'A4s','A3s','A2s','KQs','KJs','KTs','K9s','K8s','QJs','QTs',
+               'Q9s','JTs','J9s','T9s','98s','87s','76s','65s','54s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+}
+
+# ── RANGES HERO (ta range d'open par position, 9-max) ───────────────────────
+HERO_RANGES = {
+    'UTG':    ['AA','KK','QQ','JJ','TT','AKs','AQs','AJs','ATs','KQs',
+               'AKo','AQo'],
+    'UTG+1':  ['AA','KK','QQ','JJ','TT','99','AKs','AQs','AJs','ATs','A9s',
+               'KQs','KJs','AKo','AQo','AJo'],
+    'UTG+2':  ['AA','KK','QQ','JJ','TT','99','88','AKs','AQs','AJs','ATs',
+               'A9s','A8s','KQs','KJs','QJs','AKo','AQo','AJo','ATo'],
+    'MP':     ['AA','KK','QQ','JJ','TT','99','88','AKs','AQs','AJs','ATs',
+               'A9s','A8s','KQs','KJs','KTs','QJs','AKo','AQo','AJo','ATo'],
+    'MP+1':   ['AA','KK','QQ','JJ','TT','99','88','77','AKs','AQs','AJs',
+               'ATs','A9s','A8s','A7s','KQs','KJs','KTs','QJs','QTs','JTs',
+               'AKo','AQo','AJo','ATo','KQo'],
+    'HJ':     ['AA','KK','QQ','JJ','TT','99','88','77','AKs','AQs','AJs',
+               'ATs','A9s','A8s','A7s','A6s','KQs','KJs','KTs','K9s','QJs',
+               'QTs','JTs','T9s','AKo','AQo','AJo','ATo','KQo','KJo'],
+    'CO':     ['AA','KK','QQ','JJ','TT','99','88','77','66','AKs','AQs',
+               'AJs','ATs','A9s','A8s','A7s','A6s','A5s','KQs','KJs','KTs',
+               'K9s','QJs','QTs','Q9s','JTs','J9s','T9s','98s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+    'BTN':    ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44',
+               'AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s',
+               'A3s','A2s','KQs','KJs','KTs','K9s','K8s','QJs','QTs','Q9s',
+               'JTs','J9s','T9s','T8s','98s','97s','87s','76s','65s',
+               'AKo','AQo','AJo','ATo','A9o','A8o','KQo','KJo','KTo','QJo','QTo','JTo'],
+    'SB':     ['AA','KK','QQ','JJ','TT','99','88','77','66','55','AKs',
+               'AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','KQs','KJs',
+               'KTs','K9s','QJs','QTs','JTs','T9s','98s','87s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+    'BB':     ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33',
+               '22','AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s',
+               'A4s','A3s','A2s','KQs','KJs','KTs','K9s','K8s','QJs','QTs',
+               'Q9s','JTs','J9s','T9s','98s','87s','76s','65s','54s',
+               'AKo','AQo','AJo','ATo','A9o','KQo','KJo','QJo'],
+}
+
+_SUITS = 'cdhs'
+_RANKS = '23456789TJQKA'
+
+def _hand_to_combos(hand_str):
+    """Convertit 'AKs', 'QQ', 'AKo' en liste de tuples (card1, card2)."""
+    combos = []
+    if len(hand_str) == 2:  # Paire ex: 'AA'
+        r = hand_str[0]
+        for i in range(len(_SUITS)):
+            for j in range(i + 1, len(_SUITS)):
+                combos.append((f'{r}{_SUITS[i]}', f'{r}{_SUITS[j]}'))
+    elif hand_str.endswith('s'):  # Suited ex: 'AKs'
+        r1, r2 = hand_str[0], hand_str[1]
+        for s in _SUITS:
+            combos.append((f'{r1}{s}', f'{r2}{s}'))
+    elif hand_str.endswith('o'):  # Offsuit ex: 'AKo'
+        r1, r2 = hand_str[0], hand_str[1]
+        for s1 in _SUITS:
+            for s2 in _SUITS:
+                if s1 != s2:
+                    combos.append((f'{r1}{s1}', f'{r2}{s2}'))
+    return combos
+
+def _run_equity(hero_cards_str, villain_pos, n_sims=4000):
+    """Monte Carlo equity: hero_cards_str ex 'AhKd', villain_pos ex 'BTN'."""
+    try:
+        from treys import Card, Evaluator
+    except ImportError:
+        return {'error': 'treys non installé'}
+
+    evaluator = Evaluator()
+
+    # Parse hero cards (format: 'AhKd' → ['Ah', 'Kd'])
+    if len(hero_cards_str) < 4:
+        return {'error': 'Cartes hero invalides'}
+    hero_strs = [hero_cards_str[:2], hero_cards_str[2:4]]
+    try:
+        hero = [Card.new(c) for c in hero_strs]
+    except Exception:
+        return {'error': f'Cartes hero invalides: {hero_cards_str}'}
+
+    hero_set = set(hero_strs)
+
+    # Construire la range adverse
+    range_def = VILLAIN_RANGES.get(villain_pos, VILLAIN_RANGES['BTN'])
+    all_combos = []
+    for h in range_def:
+        all_combos.extend(_hand_to_combos(h))
+
+    # Filtrer combos qui utilisent les cartes du hero
+    valid_combos = [(c1, c2) for c1, c2 in all_combos
+                    if c1 not in hero_set and c2 not in hero_set]
+
+    if not valid_combos:
+        return {'error': 'Aucune combo valide dans la range'}
+
+    # Deck complet
+    full_deck_strs = [f'{r}{s}' for r in _RANKS for s in _SUITS]
+
+    wins = ties = losses = 0
+
+    for _ in range(n_sims):
+        villain_strs = random.choice(valid_combos)
+        used_strs = set(hero_strs) | set(villain_strs)
+
+        remaining = [s for s in full_deck_strs if s not in used_strs]
+        random.shuffle(remaining)
+        board_strs = remaining[:5]
+
+        try:
+            villain = [Card.new(c) for c in villain_strs]
+            board = [Card.new(c) for c in board_strs]
+            hero_rank = evaluator.evaluate(board, hero)
+            villain_rank = evaluator.evaluate(board, villain)
+        except Exception:
+            continue
+
+        if hero_rank < villain_rank:
+            wins += 1
+        elif hero_rank == villain_rank:
+            ties += 1
+        else:
+            losses += 1
+
+    total = wins + ties + losses
+    if total == 0:
+        return {'error': 'Simulation échouée'}
+
+    return {
+        'win': round(wins / total * 100, 1),
+        'tie': round(ties / total * 100, 1),
+        'lose': round(losses / total * 100, 1),
+        'villain_pos': villain_pos,
+        'range_hands': len(range_def),
+        'simulations': total,
+    }
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, 'templates'))
@@ -1172,6 +1356,20 @@ def save_villain_note():
         return jsonify({'error': str(e)}), 500
 
     return jsonify({'ok': True})
+
+
+@app.route('/api/equity', methods=['POST'])
+@require_auth
+def calc_equity():
+    data = request.get_json(force=True)
+    my_cards = data.get('my_cards', '')
+    villain_pos = data.get('villain_pos', 'BTN')
+    if not my_cards or len(my_cards) < 4:
+        return jsonify({'error': 'Cartes manquantes'}), 400
+    result = _run_equity(my_cards, villain_pos)
+    if 'error' in result:
+        return jsonify(result), 400
+    return jsonify(result)
 
 
 if __name__ == '__main__':
