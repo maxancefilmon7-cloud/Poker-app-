@@ -122,7 +122,7 @@ def _hand_to_combos(hand_str):
                     combos.append((f'{r1}{s1}', f'{r2}{s2}'))
     return combos
 
-def _run_equity(hero_cards_str, villain_pos, n_sims=4000):
+def _run_equity(hero_cards_str, villain_pos, n_sims=4000, custom_villain_ranges=None):
     """Monte Carlo equity: hero_cards_str ex 'AhKd', villain_pos ex 'BTN'."""
     try:
         from treys import Card, Evaluator
@@ -142,8 +142,9 @@ def _run_equity(hero_cards_str, villain_pos, n_sims=4000):
 
     hero_set = set(hero_strs)
 
-    # Construire la range adverse
-    range_def = VILLAIN_RANGES.get(villain_pos, VILLAIN_RANGES['BTN'])
+    # Construire la range adverse (custom en priorité, sinon défaut)
+    ranges_source = custom_villain_ranges if custom_villain_ranges else VILLAIN_RANGES
+    range_def = ranges_source.get(villain_pos) or VILLAIN_RANGES.get(villain_pos, VILLAIN_RANGES['BTN'])
     all_combos = []
     for h in range_def:
         all_combos.extend(_hand_to_combos(h))
@@ -1361,15 +1362,71 @@ def save_villain_note():
 @app.route('/api/equity', methods=['POST'])
 @require_auth
 def calc_equity():
+    username = session['username']
     data = request.get_json(force=True)
     my_cards = data.get('my_cards', '')
     villain_pos = data.get('villain_pos', 'BTN')
     if not my_cards or len(my_cards) < 4:
         return jsonify({'error': 'Cartes manquantes'}), 400
-    result = _run_equity(my_cards, villain_pos)
+    state = load_state(username)
+    custom_villain = state.get('custom_ranges', {}).get('villain')
+    result = _run_equity(my_cards, villain_pos, custom_villain_ranges=custom_villain)
     if 'error' in result:
         return jsonify(result), 400
     return jsonify(result)
+
+
+@app.route('/api/ranges', methods=['GET'])
+@require_auth
+def get_ranges():
+    username = session['username']
+    state = load_state(username)
+    custom = state.get('custom_ranges', {})
+    return jsonify({
+        'villain': custom.get('villain', VILLAIN_RANGES),
+        'hero':    custom.get('hero',    HERO_RANGES),
+        'defaults': {'villain': VILLAIN_RANGES, 'hero': HERO_RANGES},
+    })
+
+
+@app.route('/api/ranges', methods=['POST'])
+@require_auth
+def save_ranges():
+    username = session['username']
+    data = request.get_json(force=True)
+    range_type = data.get('type')   # 'villain' ou 'hero'
+    position   = data.get('position')
+    hands      = data.get('hands')  # liste ex: ['AA','KK','AKs',...]
+    if range_type not in ('villain', 'hero') or not position or hands is None:
+        return jsonify({'error': 'Paramètres invalides'}), 400
+    state = load_state(username)
+    if 'custom_ranges' not in state:
+        state['custom_ranges'] = {}
+    if range_type not in state['custom_ranges']:
+        state['custom_ranges'][range_type] = {}
+    state['custom_ranges'][range_type][position] = hands
+    persist_state(username, state)
+    return jsonify({'ok': True, 'position': position, 'type': range_type, 'hands': len(hands)})
+
+
+@app.route('/api/ranges/reset', methods=['POST'])
+@require_auth
+def reset_ranges():
+    username = session['username']
+    data = request.get_json(force=True)
+    range_type = data.get('type')
+    position   = data.get('position')
+    state = load_state(username)
+    custom = state.get('custom_ranges', {})
+    if range_type and position:
+        custom.get(range_type, {}).pop(position, None)
+    elif range_type:
+        custom.pop(range_type, None)
+    else:
+        custom.clear()
+    state['custom_ranges'] = custom
+    persist_state(username, state)
+    return jsonify({'ok': True})
 
 
 if __name__ == '__main__':

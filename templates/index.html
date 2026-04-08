@@ -262,6 +262,9 @@
     <button onclick="switchToHistory()" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
       📋 Historique
     </button>
+    <button onclick="showView('ranges')" class="w-full text-left px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-medium">
+      🎯 Ranges
+    </button>
   </div>
 
   <!-- Update Blinds -->
@@ -516,6 +519,56 @@
           <tbody id="hist-table-body"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <!-- RANGES VIEW -->
+  <div id="view-ranges" class="hidden p-4 md:p-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <h2 class="text-2xl font-black text-yellow-400">🎯 Ranges</h2>
+      <button onclick="showView('game')" class="bg-gray-700 text-white rounded-lg px-4 py-2 text-sm hover:bg-gray-600">
+        ← Retour
+      </button>
+    </div>
+
+    <!-- Toggle Héro / Vilain -->
+    <div class="flex gap-2 mb-4">
+      <button id="btn-type-villain" onclick="setRangeType('villain')"
+        class="flex-1 py-2 rounded-lg font-bold text-sm bg-yellow-400 text-black">
+        Vilain
+      </button>
+      <button id="btn-type-hero" onclick="setRangeType('hero')"
+        class="flex-1 py-2 rounded-lg font-bold text-sm bg-gray-700 text-gray-300">
+        Héro
+      </button>
+    </div>
+
+    <!-- Sélecteur de position -->
+    <div class="flex flex-wrap gap-2 mb-4" id="range-pos-btns"></div>
+
+    <!-- Info range -->
+    <div class="flex items-center justify-between mb-3">
+      <div id="range-info" class="text-xs text-gray-400"></div>
+      <div class="flex gap-2">
+        <button onclick="resetRangePos()" class="text-xs text-gray-500 hover:text-red-400 border border-gray-700 rounded px-2 py-1 hover:border-red-400 transition">
+          Réinitialiser
+        </button>
+        <button onclick="saveRange()" class="bg-yellow-400 text-black font-black rounded-lg px-4 py-1.5 text-sm hover:bg-white transition">
+          Sauvegarder
+        </button>
+      </div>
+    </div>
+
+    <!-- Grille 13x13 -->
+    <div class="overflow-x-auto">
+      <div id="range-grid" class="inline-grid gap-0.5" style="grid-template-columns: repeat(13, minmax(0, 1fr)); min-width: 390px;"></div>
+    </div>
+
+    <div class="mt-3 flex gap-4 text-xs text-gray-500">
+      <span><span class="inline-block w-3 h-3 rounded-sm bg-blue-600 mr-1"></span>Suited</span>
+      <span><span class="inline-block w-3 h-3 rounded-sm bg-yellow-400 mr-1"></span>Paire</span>
+      <span><span class="inline-block w-3 h-3 rounded-sm bg-red-700 mr-1"></span>Offsuit</span>
+      <span><span class="inline-block w-3 h-3 rounded-sm bg-gray-700 mr-1"></span>Non sélectionné</span>
     </div>
   </div>
 
@@ -822,7 +875,7 @@ function renderRadar(toActList) {
 // Views
 // ---------------------------------------------------------------------------
 function showView(name) {
-  ['login', 'setup', 'game', 'stats', 'history'].forEach(v => {
+  ['login', 'setup', 'game', 'stats', 'history', 'ranges'].forEach(v => {
     document.getElementById(`view-${v}`).classList.add('hidden');
   });
   document.getElementById(`view-${name}`).classList.remove('hidden');
@@ -851,6 +904,12 @@ function showView(name) {
   if (name === 'game') renderGame();
   if (name === 'stats') loadStats();
   if (name === 'history') loadHistory();
+  if (name === 'ranges') {
+    loadRanges().then(() => {
+      renderRangePosBtns();
+      loadRangePos(rangeState.pos);
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2001,6 +2060,129 @@ async function init() {
 }
 
 init();
+
+// ---------------------------------------------------------------------------
+// Ranges editor
+// ---------------------------------------------------------------------------
+const RANGE_RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+const ALL_POSITIONS = ['UTG','UTG+1','UTG+2','MP','MP+1','HJ','CO','BTN','SB','BB'];
+
+let rangeState = {
+  type: 'villain',       // 'villain' ou 'hero'
+  pos: 'BTN',
+  hands: new Set(),      // mains sélectionnées pour la position courante
+  allRanges: { villain: {}, hero: {} },
+};
+
+function cellHand(row, col) {
+  if (row === col) return RANGE_RANKS[row] + RANGE_RANKS[row];
+  if (row < col)  return RANGE_RANKS[row] + RANGE_RANKS[col] + 's';
+  return RANGE_RANKS[col] + RANGE_RANKS[row] + 'o';
+}
+
+function cellType(row, col) {
+  if (row === col) return 'pair';
+  if (row < col)  return 'suited';
+  return 'offsuit';
+}
+
+async function loadRanges() {
+  try {
+    const data = await api('/api/ranges', undefined);
+    rangeState.allRanges.villain = data.villain || {};
+    rangeState.allRanges.hero    = data.hero    || {};
+  } catch (e) {}
+}
+
+function setRangeType(type) {
+  rangeState.type = type;
+  document.getElementById('btn-type-villain').className =
+    'flex-1 py-2 rounded-lg font-bold text-sm ' + (type === 'villain' ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300');
+  document.getElementById('btn-type-hero').className =
+    'flex-1 py-2 rounded-lg font-bold text-sm ' + (type === 'hero' ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300');
+  renderRangePosBtns();
+  loadRangePos(rangeState.pos);
+}
+
+function renderRangePosBtns() {
+  const el = document.getElementById('range-pos-btns');
+  el.innerHTML = ALL_POSITIONS.map(p =>
+    `<button onclick="loadRangePos('${p}')" id="range-pos-${p.replace('+','_')}"
+      class="px-3 py-1.5 rounded-lg text-xs font-bold border transition ${rangeState.pos === p ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-gray-800 text-gray-300 border-gray-600 hover:border-yellow-400'}">${p}</button>`
+  ).join('');
+}
+
+function loadRangePos(pos) {
+  rangeState.pos = pos;
+  const rangeArr = (rangeState.allRanges[rangeState.type] || {})[pos] || [];
+  rangeState.hands = new Set(rangeArr);
+  renderRangePosBtns();
+  renderRangeGrid();
+  updateRangeInfo();
+}
+
+function updateRangeInfo() {
+  const el = document.getElementById('range-info');
+  if (!el) return;
+  const n = rangeState.hands.size;
+  const total = 169;
+  const pct = ((n / total) * 100).toFixed(1);
+  el.textContent = `${rangeState.type === 'villain' ? 'Vilain' : 'Héro'} — ${rangeState.pos} : ${n} mains (${pct}% des combos)`;
+}
+
+function renderRangeGrid() {
+  const grid = document.getElementById('range-grid');
+  if (!grid) return;
+  let html = '';
+  for (let r = 0; r < 13; r++) {
+    for (let c = 0; c < 13; c++) {
+      const hand = cellHand(r, c);
+      const type = cellType(r, c);
+      const sel = rangeState.hands.has(hand);
+      let bg = sel
+        ? (type === 'pair' ? 'bg-yellow-400 text-black' : type === 'suited' ? 'bg-blue-600 text-white' : 'bg-red-700 text-white')
+        : 'bg-gray-800 text-gray-500 hover:bg-gray-700';
+      html += `<button onclick="toggleHand('${hand}')"
+        class="aspect-square flex items-center justify-center text-xs font-bold rounded-sm transition ${bg}"
+        style="font-size:clamp(7px,1.3vw,11px)">${hand}</button>`;
+    }
+  }
+  grid.innerHTML = html;
+}
+
+function toggleHand(hand) {
+  if (rangeState.hands.has(hand)) {
+    rangeState.hands.delete(hand);
+  } else {
+    rangeState.hands.add(hand);
+  }
+  renderRangeGrid();
+  updateRangeInfo();
+}
+
+async function saveRange() {
+  try {
+    await api('/api/ranges', {
+      type: rangeState.type,
+      position: rangeState.pos,
+      hands: [...rangeState.hands],
+    });
+    // Mettre à jour le cache local
+    if (!rangeState.allRanges[rangeState.type]) rangeState.allRanges[rangeState.type] = {};
+    rangeState.allRanges[rangeState.type][rangeState.pos] = [...rangeState.hands];
+    showToast(`Range ${rangeState.type === 'villain' ? 'Vilain' : 'Héro'} ${rangeState.pos} sauvegardée`, 'success');
+    updateRangeInfo();
+  } catch (e) {}
+}
+
+async function resetRangePos() {
+  try {
+    await api('/api/ranges/reset', { type: rangeState.type, position: rangeState.pos });
+    await loadRanges();
+    loadRangePos(rangeState.pos);
+    showToast('Range réinitialisée', 'success');
+  } catch (e) {}
+}
 </script>
 </body>
 </html>
