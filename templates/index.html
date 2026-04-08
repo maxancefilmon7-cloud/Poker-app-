@@ -2130,6 +2130,14 @@ function updateRangeInfo() {
   el.textContent = `${rangeState.type === 'villain' ? 'Vilain' : 'Héro'} — ${rangeState.pos} : ${n} mains (${pct}% des combos)`;
 }
 
+let _dragAction = null; // 'add' ou 'remove'
+
+function cellBg(hand, type) {
+  const sel = rangeState.hands.has(hand);
+  if (sel) return type === 'pair' ? 'bg-yellow-400 text-black' : type === 'suited' ? 'bg-blue-600 text-white' : 'bg-red-700 text-white';
+  return 'bg-gray-800 text-gray-500';
+}
+
 function renderRangeGrid() {
   const grid = document.getElementById('range-grid');
   if (!grid) return;
@@ -2138,26 +2146,73 @@ function renderRangeGrid() {
     for (let c = 0; c < 13; c++) {
       const hand = cellHand(r, c);
       const type = cellType(r, c);
-      const sel = rangeState.hands.has(hand);
-      let bg = sel
-        ? (type === 'pair' ? 'bg-yellow-400 text-black' : type === 'suited' ? 'bg-blue-600 text-white' : 'bg-red-700 text-white')
-        : 'bg-gray-800 text-gray-500 hover:bg-gray-700';
-      html += `<button onclick="toggleHand('${hand}')"
-        class="aspect-square flex items-center justify-center text-xs font-bold rounded-sm transition ${bg}"
+      html += `<button data-hand="${hand}" data-type="${type}"
+        class="aspect-square flex items-center justify-center text-xs font-bold rounded-sm select-none ${cellBg(hand, type)}"
         style="font-size:clamp(7px,1.3vw,11px)">${hand}</button>`;
     }
   }
   grid.innerHTML = html;
+  attachGridEvents(grid);
 }
 
-function toggleHand(hand) {
-  if (rangeState.hands.has(hand)) {
-    rangeState.hands.delete(hand);
-  } else {
-    rangeState.hands.add(hand);
-  }
-  renderRangeGrid();
-  updateRangeInfo();
+function applyHandAction(hand) {
+  if (_dragAction === 'add') rangeState.hands.add(hand);
+  else rangeState.hands.delete(hand);
+}
+
+function refreshCell(btn) {
+  const hand = btn.dataset.hand;
+  const type = btn.dataset.type;
+  btn.className = `aspect-square flex items-center justify-center text-xs font-bold rounded-sm select-none ${cellBg(hand, type)}`;
+}
+
+function attachGridEvents(grid) {
+  // Mouse
+  grid.addEventListener('mousedown', e => {
+    const btn = e.target.closest('[data-hand]');
+    if (!btn) return;
+    e.preventDefault();
+    const hand = btn.dataset.hand;
+    _dragAction = rangeState.hands.has(hand) ? 'remove' : 'add';
+    applyHandAction(hand);
+    refreshCell(btn);
+    updateRangeInfo();
+  });
+
+  grid.addEventListener('mouseover', e => {
+    if (_dragAction === null) return;
+    const btn = e.target.closest('[data-hand]');
+    if (!btn) return;
+    applyHandAction(btn.dataset.hand);
+    refreshCell(btn);
+    updateRangeInfo();
+  });
+
+  document.addEventListener('mouseup', () => { _dragAction = null; }, { once: false });
+
+  // Touch
+  grid.addEventListener('touchstart', e => {
+    const btn = e.target.closest('[data-hand]');
+    if (!btn) return;
+    const hand = btn.dataset.hand;
+    _dragAction = rangeState.hands.has(hand) ? 'remove' : 'add';
+    applyHandAction(hand);
+    refreshCell(btn);
+    updateRangeInfo();
+  }, { passive: true });
+
+  grid.addEventListener('touchmove', e => {
+    if (_dragAction === null) return;
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const btn = el && el.closest('[data-hand]');
+    if (!btn) return;
+    applyHandAction(btn.dataset.hand);
+    refreshCell(btn);
+    updateRangeInfo();
+  }, { passive: true });
+
+  grid.addEventListener('touchend', () => { _dragAction = null; });
 }
 
 async function saveRange() {
