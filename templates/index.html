@@ -1378,7 +1378,7 @@ function bbStr(chips, bb) {
 function decorateAction(line, bb) {
   // Add (XBB) after Raise / Bet amounts
   if (!bb) return line;
-  return line.replace(/(Raise|Bet)\s+(\d+(?:\.\d+)?)/gi, (m, verb, amt) => {
+  return line.replace(/(Raise|Bet|All-in)\s+(\d+(?:\.\d+)?)/gi, (m, verb, amt) => {
     const v = parseFloat(amt) / bb;
     return `${verb} ${fmtChips(parseFloat(amt))} (${Math.round(v * 10) / 10}BB)`;
   });
