@@ -505,6 +505,7 @@ function getTableSize() {
   return parseInt(localStorage.getItem('table_size') || '9');
 }
 function setTableSize(n) {
+  saveStartHandDraft();
   localStorage.setItem('table_size', n);
   S.my_pos = null;
   renderGame();
@@ -849,8 +850,8 @@ function renderGame() {
 
 // --- START HAND ---
 function renderStartHand() {
-  initCardPicker('h1');
-  initCardPicker('h2');
+  if (!cardSels['h1']) initCardPicker('h1');
+  if (!cardSels['h2']) initCardPicker('h2');
   const size = getTableSize();
   const POSITIONS = POSITIONS_BY_SIZE[size] || POSITIONS_BY_SIZE[9];
   if (S.my_pos && !POSITIONS.includes(S.my_pos)) S.my_pos = null;
@@ -862,7 +863,8 @@ function renderStartHand() {
     `<button onclick="setTableSize(${n})" class="px-3 py-1 rounded-lg text-xs font-bold ${n===size ? 'bg-yellow-400 text-black' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}">${n} joueurs</button>`
   ).join('');
 
-  const curStack = S.stack_actuel != null ? Math.round(S.stack_actuel) : '';
+  const curStack = S._draft_stack != null ? S._draft_stack
+    : (S.stack_actuel != null ? Math.round(S.stack_actuel) : '');
   const bbVal = S.bb_val || 0;
   const blindsLabel = bbVal > 0 ? `${Math.round(bbVal/2).toLocaleString('fr-FR')}/${Math.round(bbVal).toLocaleString('fr-FR')}` : '—';
   return `
@@ -898,7 +900,12 @@ function renderStartHand() {
   `;
 }
 
+function saveStartHandDraft() {
+  const inp = document.getElementById('sh-stack');
+  if (inp) S._draft_stack = inp.value;
+}
 function selectPos(pos) {
+  saveStartHandDraft();
   S.my_pos = pos;
   renderGame();
 }
@@ -916,6 +923,7 @@ async function startHand() {
     const state = await api('/api/hand/start', { my_pos: pos, c1, c2, players, stack });
     state.username = S.username;
     S = state;
+    delete S._draft_stack;
     cardSels = {};
     updateSidebar();
     renderGame();
