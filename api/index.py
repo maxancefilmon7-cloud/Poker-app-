@@ -553,7 +553,7 @@ def hand_start():
     my_cards = f'{c1}{c2}' if c1 and c2 else ''
     state['hand_data'] = {
         'pot_total': pot,
-        'actions': [],
+        'actions': [f'__pot__:Préflop:{int(round(pot))}'],
         'board': '',
         'my_cards': my_cards,
     }
@@ -738,6 +738,17 @@ def action_next_street():
     # Steps that show card input before action
     card_steps = {'FLOP_CARDS', 'TURN_CARD', 'RIVER_CARD', 'RESULTAT'}
     action_steps = {'FLOP', 'TURN', 'RIVER'}
+
+    # Enregistre le pot au debut de la nouvelle street (marker synthétique)
+    street_name_map = {
+        'FLOP_CARDS': 'Flop', 'FLOP': 'Flop',
+        'TURN_CARD': 'Turn', 'TURN': 'Turn',
+        'RIVER_CARD': 'River', 'RIVER': 'River',
+    }
+    new_street = street_name_map.get(next_step)
+    if new_street:
+        pot_now = state['hand_data'].get('pot_total', 0)
+        state['hand_data']['actions'].append(f'__pot__:{new_street}:{int(round(pot_now))}')
 
     state['step'] = next_step
 

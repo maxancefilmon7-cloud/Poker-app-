@@ -1591,10 +1591,17 @@ function showHandDetail(idx) {
   const sb = h.small_blind || (bb ? bb / 2 : null);
   const stackStart = h.stack_start;
 
-  // Groupe par street
+  // Groupe par street + extrait les marqueurs de pot
   const streets = ['Préflop', 'Flop', 'Turn', 'River'];
   const grouped = { 'Préflop': [], 'Flop': [], 'Turn': [], 'River': [] };
+  const potStart = { 'Préflop': null, 'Flop': null, 'Turn': null, 'River': null };
   actions.forEach(a => {
+    // Marqueur __pot__:Street:amount
+    const potMatch = /^__pot__:(Préflop|Flop|Turn|River):(\d+)$/.exec(a);
+    if (potMatch) {
+      potStart[potMatch[1]] = parseInt(potMatch[2], 10);
+      return;
+    }
     const street = streets.find(s => a.includes(`(${s})`));
     if (street) {
       const clean = a.replace(` (${street})`, '');
@@ -1610,11 +1617,20 @@ function showHandDetail(idx) {
   const riverCard = boardCards.slice(4, 5);
 
   const streetBlock = (label, boardSlice, lines) => {
-    if (!boardSlice.length && !lines.length) return '';
+    if (!boardSlice.length && !lines.length && potStart[label] == null) return '';
+    const pot = potStart[label];
+    const potLabel = pot != null
+      ? `<span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Pot</span>
+         <span class="text-sm font-bold text-white ml-1">${fmtChips(pot)}</span>
+         ${bb ? `<span class="text-[10px] text-slate-500 ml-1">(${bbStr(pot, bb)})</span>` : ''}`
+      : '';
     return `
       <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 p-3 mb-3">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-[11px] font-bold text-yellow-400 uppercase tracking-widest">${label}</div>
+        <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
+          <div class="flex items-center gap-3">
+            <div class="text-[11px] font-bold text-yellow-400 uppercase tracking-widest">${label}</div>
+            ${potLabel}
+          </div>
           ${boardSlice.length ? `<div>${renderBoardCards(boardSlice)}</div>` : ''}
         </div>
         ${lines.length
