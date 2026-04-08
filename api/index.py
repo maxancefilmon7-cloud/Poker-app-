@@ -628,6 +628,7 @@ def action_raise():
     username = session['username']
     data = request.get_json(force=True)
     street = data.get('street', 'Préflop')
+    is_allin = bool(data.get('allin'))
     try:
         amount = float(data.get('amount', 0))
     except (TypeError, ValueError):
@@ -635,7 +636,7 @@ def action_raise():
 
     state = load_state(username)
 
-    if amount <= state['current_bet']:
+    if not is_allin and amount <= state['current_bet']:
         return jsonify({'error': f'Le raise doit être > {state["current_bet"]}'}), 400
 
     state['history'].append(_snapshot(state))
@@ -655,9 +656,11 @@ def action_raise():
         state['hero_invested'] += cost
         state['stack_actuel'] -= cost
 
-    state['current_bet'] = amount
+    # Pour un short all-in, on ne baisse pas la mise courante
+    state['current_bet'] = max(state['current_bet'], amount)
     state['player_invested_street'] = invested
-    state['hand_data']['actions'].append(f'{current_actor}: Raise {amount} ({street})')
+    label = 'All-in' if is_allin else 'Raise'
+    state['hand_data']['actions'].append(f'{current_actor}: {label} {amount} ({street})')
     state['is_raising'] = False
 
     # Rebuild to_act_list: everyone except raiser who is still active

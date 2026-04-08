@@ -1006,10 +1006,13 @@ function renderAction(street, nextStep) {
       const costToCall = Math.max(0, currentBet - alreadyIn);
       const callLabel = costToCall > 0 ? `Call ${Math.round(costToCall).toLocaleString('fr-FR')}` : 'Check';
 
-      content += `<div class="grid grid-cols-3 gap-3 mb-4">
+      content += `<div class="grid grid-cols-2 gap-3 mb-3">
         <button onclick="doFold('${street}')" class="bg-red-700 hover:bg-red-600 text-white font-black rounded-xl py-3">Fold</button>
         <button onclick="doCall('${street}')" class="bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl py-3">${callLabel}</button>
+      </div>
+      <div class="grid grid-cols-2 gap-3 mb-4">
         <button onclick="triggerRaise()" class="bg-yellow-400 hover:bg-yellow-300 text-black font-black rounded-xl py-3">Raise</button>
+        <button onclick="doAllIn('${street}')" class="bg-purple-600 hover:bg-purple-500 text-white font-black rounded-xl py-3">All-in</button>
       </div>`;
     }
   }
@@ -1097,6 +1100,35 @@ function triggerRaise() {
 function cancelRaise() {
   S.is_raising = false;
   renderGame();
+}
+
+async function doAllIn(street) {
+  const toAct = S.to_act_list || [];
+  const actor = toAct[0];
+  if (!actor) return;
+  const invested = (S.player_invested_street || {})[actor] || 0;
+  let amount;
+  if (actor === S.my_pos) {
+    // Hero all-in: tout son stack restant + ce qu'il a deja mis ce street
+    const remaining = S.stack_actuel || 0;
+    if (remaining <= 0) return showToast('Stack vide', 'error');
+    amount = invested + remaining;
+    if (!confirm(`All-in à ${Math.round(amount).toLocaleString('fr-FR')} jetons ?`)) return;
+  } else {
+    // Villain all-in: demander son stack restant
+    const raw = prompt(`Stack restant de ${actor} (jetons) ?`);
+    if (raw == null) return;
+    const remaining = parseFloat(raw);
+    if (!remaining || remaining <= 0) return showToast('Stack invalide', 'error');
+    amount = invested + remaining;
+  }
+  try {
+    const state = await api('/api/action/raise', { street, amount, allin: true });
+    state.username = S.username;
+    S = state;
+    updateSidebar();
+    renderGame();
+  } catch (e) {}
 }
 
 async function submitRaise(street) {
