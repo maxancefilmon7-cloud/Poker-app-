@@ -1596,10 +1596,14 @@ function showHandDetail(idx) {
   const grouped = { 'Préflop': [], 'Flop': [], 'Turn': [], 'River': [] };
   const potStart = { 'Préflop': null, 'Flop': null, 'Turn': null, 'River': null };
   actions.forEach(a => {
-    // Marqueur __pot__:Street:amount
-    const potMatch = /^__pot__:(Préflop|Flop|Turn|River):(\d+)$/.exec(a);
-    if (potMatch) {
-      potStart[potMatch[1]] = parseInt(potMatch[2], 10);
+    // Marqueur __pot__:Street:amount (regex tolerante a l'accent)
+    if (typeof a === 'string' && a.startsWith('__pot__:')) {
+      const parts = a.split(':');
+      if (parts.length >= 3) {
+        const streetKey = parts[1].startsWith('Pr') ? 'Préflop' : parts[1];
+        const amt = parseInt(parts[2], 10);
+        if (!isNaN(amt) && streetKey in potStart) potStart[streetKey] = amt;
+      }
       return;
     }
     const street = streets.find(s => a.includes(`(${s})`));
@@ -1617,25 +1621,32 @@ function showHandDetail(idx) {
   const riverCard = boardCards.slice(4, 5);
 
   const streetBlock = (label, boardSlice, lines) => {
-    if (!boardSlice.length && !lines.length && potStart[label] == null) return '';
+    if (!boardSlice.length && !lines.length) return '';
+    // Pot affiche uniquement pour Flop/Turn/River
+    const showPot = label !== 'Préflop' && potStart[label] != null;
     const pot = potStart[label];
-    const potLabel = pot != null
-      ? `<span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Pot</span>
-         <span class="text-sm font-bold text-white ml-1">${fmtChips(pot)}</span>
-         ${bb ? `<span class="text-[10px] text-slate-500 ml-1">(${bbStr(pot, bb)})</span>` : ''}`
+    const potChip = showPot
+      ? `<div class="inline-flex items-center gap-1.5 bg-black/30 border border-slate-700/60 rounded-full px-2.5 py-0.5">
+           <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Pot</span>
+           <span class="text-xs font-bold text-white">${fmtChips(pot)}</span>
+           ${bb ? `<span class="text-[9px] text-slate-500">(${bbStr(pot, bb)})</span>` : ''}
+         </div>`
       : '';
     return `
       <div class="bg-slate-900/60 rounded-xl border border-slate-700/60 p-3 mb-3">
         <div class="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 flex-wrap">
             <div class="text-[11px] font-bold text-yellow-400 uppercase tracking-widest">${label}</div>
-            ${potLabel}
+            ${potChip}
           </div>
           ${boardSlice.length ? `<div>${renderBoardCards(boardSlice)}</div>` : ''}
         </div>
-        ${lines.length
-          ? lines.map(a => `<div class="text-sm text-slate-200 py-0.5 pl-2 border-l-2 border-yellow-400/40">${a}</div>`).join('')
-          : '<div class="text-xs text-slate-500 italic">Aucune action</div>'}
+        ${(() => {
+          const clean = lines.filter(a => !(typeof a === 'string' && a.startsWith('__pot__')));
+          return clean.length
+            ? clean.map(a => `<div class="text-sm text-slate-200 py-0.5 pl-2 border-l-2 border-yellow-400/40">${a}</div>`).join('')
+            : '<div class="text-xs text-slate-500 italic">Aucune action</div>';
+        })()}
       </div>`;
   };
 
